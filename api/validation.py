@@ -21,6 +21,7 @@ class XLSFormValidator:
         self.question_constraints = {}
         self.required_questions = set()
         self.choice_lists = {}
+        self.question_labels = {}  # Map labels to question names
 
     def parse_xlsform(self, xlsform_file) -> bool:
         """
@@ -86,6 +87,10 @@ class XLSFormValidator:
             q_type = row['type']
             
             self.question_types[name] = q_type
+            
+            if 'label' in self.survey_sheet.columns and not pd.isna(row.get('label')):
+                label = row['label']
+                self.question_labels[label] = name
             
             if 'required' in self.survey_sheet.columns and row.get('required') == 'yes':
                 self.required_questions.add(name)
@@ -179,50 +184,51 @@ class XLSFormValidator:
             return errors
         
         for col_idx, column in enumerate(df.columns):
-            if column not in self.question_types:
+            question_name = self._resolve_column_to_question_name(column)
+            if question_name is None:
                 continue
                 
-            question_type = self.question_types[column]
+            question_type = self.question_types[question_name]
             
             for row_idx, value in enumerate(df[column]):
                 if pd.isna(value):
-                    if column in self.required_questions:
+                    if question_name in self.required_questions:
                         errors.append({
                             'line': row_idx + 2,  # +2 because pandas is 0-indexed and Excel has a header row
                             'column': col_idx + 1,
                             'error_type': ERROR_VALUE_REQUIRED,
-                            'error_explanation': f"Value is required for question '{column}'",
-                            'question_name': column
+                            'error_explanation': f"Value is required for question '{question_name}'",
+                            'question_name': question_name
                         })
                     continue
                 
-                type_error = self._validate_type(value, question_type, column, list_name=self._extract_list_name(question_type))
+                type_error = self._validate_type(value, question_type, question_name, list_name=self._extract_list_name(question_type))
                 if type_error:
                     errors.append({
                         'line': row_idx + 2,
                         'column': col_idx + 1,
                         'error_type': ERROR_TYPE_MISMATCH,
                         'error_explanation': type_error,
-                        'question_name': column
+                        'question_name': question_name
                     })
                     continue
                 
-                if column in self.question_constraints:
-                    constraint_error = self._validate_constraint(value, self.question_constraints[column], column)
+                if question_name in self.question_constraints:
+                    constraint_error = self._validate_constraint(value, self.question_constraints[question_name], question_name)
                     if constraint_error:
                         errors.append({
                             'line': row_idx + 2,
                             'column': col_idx + 1,
                             'error_type': ERROR_CONSTRAINT_UNSATISFIED,
                             'error_explanation': constraint_error,
-                            'question_name': column
+                            'question_name': question_name
                         })
         
         return errors
     
     def _validate_headers(self, columns) -> List[Dict[str, Any]]:
         """
-        Validate that all column headers are present in the XLSForm.
+        Validate that all column headers are present in the XLSForm as names or labels.
         
         Args:
             columns: The column headers from the spreadsheet
@@ -233,12 +239,13 @@ class XLSFormValidator:
         errors = []
         
         for col_idx, column in enumerate(columns):
-            if column not in self.question_types:
+            question_name = self._resolve_column_to_question_name(column)
+            if question_name is None:
                 errors.append({
                     'line': 1,
                     'column': col_idx + 1,
                     'error_type': ERROR_TYPE_MISMATCH,
-                    'error_explanation': f"Column header '{column}' is not a valid question name in the XLSForm",
+                    'error_explanation': f"Column header '{column}' does not match any question name or label in the XLSForm",
                     'question_name': column
                 })
         
@@ -366,4 +373,21 @@ class XLSFormValidator:
             parts = question_type.split(' ', 1)
             if len(parts) > 1:
                 return parts[1].strip()
+        return None
+    def _resolve_column_to_question_name(self, column: str) -> Optional[str]:
+        """
+        Resolve a column header to a question name, checking both names and labels.
+        
+        Args:
+            column: The column header from the spreadsheet
+            
+        Returns:
+            Optional[str]: The question name if found, None otherwise
+        """
+        if column in self.question_types:
+            return column
+        
+        if column in self.question_labels:
+            return self.question_labels[column]
+        
         return None

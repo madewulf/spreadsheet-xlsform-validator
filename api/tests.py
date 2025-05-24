@@ -32,6 +32,10 @@ class SpreadsheetValidationTests(TestCase):
         self.create_invalid_test_spreadsheet_constraint()
         
         self.create_invalid_test_spreadsheet_required()
+        
+        self.create_valid_test_spreadsheet_with_labels()
+        
+        self.create_mixed_test_spreadsheet()
     
     def create_test_xlsform(self):
         """
@@ -203,3 +207,70 @@ class SpreadsheetValidationTests(TestCase):
         
         required_errors = [e for e in response.data['errors'] if e['error_type'] == 'error_value_required']
         self.assertTrue(len(required_errors) > 0)
+    def create_valid_test_spreadsheet_with_labels(self):
+        """
+        Create a valid test spreadsheet using labels instead of names.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        ws.append(['Age', 'Gender', 'Name', 'Weight (kg)'])
+        
+        ws.append([25, 'male', 'John Doe', 75.5])
+        ws.append([30, 'female', 'Jane Smith', 65.0])
+        ws.append([45, 'other', 'Alex Johnson', 80.2])
+        
+        wb.save('api/test_data/valid_spreadsheet_labels.xlsx')
+    
+    def create_mixed_test_spreadsheet(self):
+        """
+        Create a test spreadsheet using both names and labels.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        ws.append(['age', 'Gender', 'name', 'Weight (kg)'])
+        
+        ws.append([25, 'male', 'John Doe', 75.5])
+        ws.append([30, 'female', 'Jane Smith', 65.0])
+        ws.append([45, 'other', 'Alex Johnson', 80.2])
+        
+        wb.save('api/test_data/mixed_spreadsheet.xlsx')
+    
+    def test_valid_spreadsheet_with_labels(self):
+        """
+        Test validation with a spreadsheet using labels as column headers.
+        """
+        with open('api/test_data/test_xlsform.xlsx', 'rb') as xlsform_file:
+            with open('api/test_data/valid_spreadsheet_labels.xlsx', 'rb') as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        'xlsform_file': xlsform_file,
+                        'spreadsheet_file': spreadsheet_file
+                    },
+                    format='multipart'
+                )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result'], 'valid')
+        self.assertNotIn('errors', response.data)
+    
+    def test_mixed_names_and_labels(self):
+        """
+        Test validation with a spreadsheet using both names and labels.
+        """
+        with open('api/test_data/test_xlsform.xlsx', 'rb') as xlsform_file:
+            with open('api/test_data/mixed_spreadsheet.xlsx', 'rb') as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        'xlsform_file': xlsform_file,
+                        'spreadsheet_file': spreadsheet_file
+                    },
+                    format='multipart'
+                )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result'], 'valid')
+        self.assertNotIn('errors', response.data)
