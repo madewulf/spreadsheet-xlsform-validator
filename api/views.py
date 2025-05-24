@@ -1,9 +1,11 @@
 """
 Views for the XLSForm validator API.
 """
+from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import action
 
 from .serializers import SpreadsheetValidationSerializer, ValidationResultSerializer
 from .validation import XLSFormValidator
@@ -12,7 +14,7 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
     """
     API endpoint for validating spreadsheet data against an XLSForm.
     """
-    http_method_names = ["post", "options", "head", "trace"]
+    http_method_names = ["get", "post", "options", "head", "trace"]
     parser_classes = [MultiPartParser, FormParser]
     
     def create(self, request):
@@ -59,3 +61,10 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
         result_serializer.is_valid(raise_exception=True)
         
         return Response(result_serializer.validated_data, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['get'])
+    def form(self, request):
+        """
+        Render the web UI form for file upload and validation.
+        """
+        return render(request, 'api/validate.html')
