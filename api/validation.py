@@ -3,6 +3,7 @@ Validation module for XLSForm and spreadsheet data.
 """
 import pandas as pd
 import os
+import openpyxl
 from typing import Dict, List, Any, Tuple, Optional
 import re
 
@@ -391,3 +392,48 @@ class XLSFormValidator:
             return self.question_labels[column]
         
         return None
+        
+    def create_highlighted_excel(self, spreadsheet_file, errors: List[Dict[str, Any]]) -> str:
+        """
+        Create an Excel file with highlighted error cells and an error tab.
+        
+        Args:
+            spreadsheet_file: The original spreadsheet file
+            errors: List of validation errors
+            
+        Returns:
+            str: Path to the highlighted Excel file
+        """
+        import tempfile
+        from openpyxl.styles import PatternFill
+        
+        original_path = self._save_temp_file(spreadsheet_file)
+        
+        wb = openpyxl.load_workbook(original_path)
+        ws = wb.active
+        
+        red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+        
+        for error in errors:
+            if error['line'] > 1:  # Skip header row
+                cell = ws.cell(row=error['line'], column=error['column'])
+                cell.fill = red_fill
+        
+        errors_sheet = wb.create_sheet("Errors")
+        errors_sheet.append(["Line", "Column", "Question", "Error Type", "Explanation"])
+        
+        for error in errors:
+            errors_sheet.append([
+                error['line'],
+                error['column'], 
+                error['question_name'],
+                error['error_type'],
+                error['error_explanation']
+            ])
+        
+        highlighted_path = tempfile.mktemp(suffix='.xlsx')
+        wb.save(highlighted_path)
+        
+        os.remove(original_path)
+        
+        return highlighted_path

@@ -274,3 +274,30 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['result'], 'valid')
         self.assertNotIn('errors', response.data)
+    def test_highlighted_excel_download(self):
+        """
+        Test downloading highlighted Excel file for invalid spreadsheet.
+        """
+        with open('api/test_data/test_xlsform.xlsx', 'rb') as xlsform_file:
+            with open('api/test_data/invalid_type_mismatch.xlsx', 'rb') as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        'xlsform_file': xlsform_file,
+                        'spreadsheet_file': spreadsheet_file
+                    },
+                    format='multipart'
+                )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result'], 'invalid')
+        self.assertIn('download_id', response.data)
+        
+        download_url = reverse('validate-download')
+        download_response = self.client.get(
+            f"{download_url}?id={response.data['download_id']}"
+        )
+        
+        self.assertEqual(download_response.status_code, 200)
+        self.assertEqual(download_response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        self.assertIn('highlighted_spreadsheet.xlsx', download_response['Content-Disposition'])
