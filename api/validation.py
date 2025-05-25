@@ -284,15 +284,18 @@ class XLSFormValidator:
         
         elif question_type.startswith('select_one'):
             if list_name and list_name in self.choice_lists:
-                if value not in self.choice_lists[list_name]:
+                value_lower = value.lower()
+                choices_lower = [choice.lower() for choice in self.choice_lists[list_name]]
+                if value_lower not in choices_lower:
                     return f"Value '{value}' is not a valid choice for select_one question '{question_name}'"
             return None
         
         elif question_type.startswith('select_multiple'):
             if list_name and list_name in self.choice_lists:
-                values = [v.strip() for v in value.split()]
+                values = [v.strip().lower() for v in value.split()]
+                choices_lower = [choice.lower() for choice in self.choice_lists[list_name]]
                 for v in values:
-                    if v not in self.choice_lists[list_name]:
+                    if v not in choices_lower:
                         return f"Value '{v}' is not a valid choice for select_multiple question '{question_name}'"
             return None
         

@@ -36,6 +36,8 @@ class SpreadsheetValidationTests(TestCase):
         self.create_valid_test_spreadsheet_with_labels()
         
         self.create_mixed_test_spreadsheet()
+        
+        self.create_case_insensitive_test_spreadsheet()
     
     def create_test_xlsform(self):
         """
@@ -274,6 +276,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['result'], 'valid')
         self.assertNotIn('errors', response.data)
+<<<<<<< HEAD
     def test_highlighted_excel_download(self):
         """
         Test downloading highlighted Excel file for invalid spreadsheet.
@@ -301,3 +304,41 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(download_response.status_code, 200)
         self.assertEqual(download_response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         self.assertIn('highlighted_spreadsheet.xlsx', download_response['Content-Disposition'])
+||||||| parent of 8b4c708 (Add case-insensitive validation for select_one and select_multiple values)
+=======
+    def create_case_insensitive_test_spreadsheet(self):
+        """
+        Create a test spreadsheet with case differences in select_one values.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        ws.append(['age', 'gender', 'name', 'weight'])
+        
+        ws.append([25, 'MALE', 'John Doe', 75.5])  # MALE instead of male
+        ws.append([30, 'Female', 'Jane Smith', 65.0])  # Female instead of female
+        ws.append([45, 'oThEr', 'Alex Johnson', 80.2])  # oThEr instead of other
+        
+        wb.save('api/test_data/case_insensitive_spreadsheet.xlsx')
+    
+    def test_case_insensitive_validation(self):
+        """
+        Test that validation works with case-insensitive matching for select_one values.
+        """
+        self.create_case_insensitive_test_spreadsheet()
+        
+        with open('api/test_data/test_xlsform.xlsx', 'rb') as xlsform_file:
+            with open('api/test_data/case_insensitive_spreadsheet.xlsx', 'rb') as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        'xlsform_file': xlsform_file,
+                        'spreadsheet_file': spreadsheet_file
+                    },
+                    format='multipart'
+                )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result'], 'valid')
+        self.assertNotIn('errors', response.data)
+>>>>>>> 8b4c708 (Add case-insensitive validation for select_one and select_multiple values)
