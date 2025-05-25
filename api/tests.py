@@ -435,3 +435,17 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
+        
+    def test_excel_date_format_validation(self):
+        """
+        Test that validation works with Excel date format (YYYY-MM-DD HH:MM:SS).
+        """
+        with open("api/test_data/test_xlsform_with_date.xlsx", "rb") as xlsform_file:
+            with open("api/test_data/excel_date_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertNotIn("errors", response.data)

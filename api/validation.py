@@ -317,9 +317,20 @@ class XLSFormValidator:
         
         elif question_type == 'date':
             date_pattern = r'^\d{4}-\d{2}-\d{2}$'
-            if not re.match(date_pattern, value):
-                return f"Value '{value}' is not a valid date (YYYY-MM-DD) for question '{question_name}'"
-            return None
+            
+            if re.match(date_pattern, value):
+                return None
+                
+            try:
+                from datetime import datetime
+                parsed_date = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                date_only = parsed_date.strftime('%Y-%m-%d')
+                if re.match(date_pattern, date_only):
+                    return None
+            except ValueError:
+                pass
+                
+            return f"Value '{value}' is not a valid date (YYYY-MM-DD) for question '{question_name}'"
         
         elif question_type == 'time':
             time_pattern = r'^\d{2}:\d{2}(:\d{2})?$'
