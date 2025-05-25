@@ -24,6 +24,7 @@ class SpreadsheetValidationTests(TestCase):
         os.makedirs('api/test_data', exist_ok=True)
         
         self.create_test_xlsform()
+        self.create_test_xlsform_with_integer_choices()
         
         self.create_valid_test_spreadsheet()
         
@@ -38,6 +39,8 @@ class SpreadsheetValidationTests(TestCase):
         self.create_mixed_test_spreadsheet()
         
         self.create_case_insensitive_test_spreadsheet()
+        
+        self.create_integer_choice_test_spreadsheet()
     
     def create_test_xlsform(self):
         """
@@ -276,7 +279,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['result'], 'valid')
         self.assertNotIn('errors', response.data)
-<<<<<<< HEAD
+    
     def test_highlighted_excel_download(self):
         """
         Test downloading highlighted Excel file for invalid spreadsheet.
@@ -304,8 +307,48 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(download_response.status_code, 200)
         self.assertEqual(download_response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         self.assertIn('highlighted_spreadsheet.xlsx', download_response['Content-Disposition'])
-||||||| parent of 8b4c708 (Add case-insensitive validation for select_one and select_multiple values)
-=======
+    
+    def create_test_xlsform_with_integer_choices(self):
+        """
+        Create a test XLSForm file with integer choice values.
+        """
+        wb = openpyxl.Workbook()
+        
+        survey = wb.active
+        survey.title = 'survey'
+        
+        survey.append(['type', 'name', 'label', 'required', 'constraint'])
+        
+        survey.append(['integer', 'age', 'Age', 'yes', '. < 150'])
+        survey.append(['select_one status', 'status', 'Status', 'yes', ''])
+        survey.append(['text', 'name', 'Name', 'yes', ''])
+        survey.append(['decimal', 'weight', 'Weight (kg)', 'no', '. > 0'])
+        
+        choices = wb.create_sheet('choices')
+        
+        choices.append(['list_name', 'name', 'label'])
+        
+        choices.append(['status', 1, 'Active'])
+        choices.append(['status', 2, 'Inactive'])
+        choices.append(['status', 3, 'Pending'])
+        
+        wb.save('api/test_data/test_xlsform_integer_choices.xlsx')
+    
+    def create_integer_choice_test_spreadsheet(self):
+        """
+        Create a test spreadsheet with integer choice values.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        ws.append(['age', 'status', 'name', 'weight'])
+        
+        ws.append([25, 1, 'John Doe', 75.5])  # Integer choice value
+        ws.append([30, 2, 'Jane Smith', 65.0])  # Integer choice value
+        ws.append([45, 3, 'Alex Johnson', 80.2])  # Integer choice value
+        
+        wb.save('api/test_data/integer_choice_spreadsheet.xlsx')
+    
     def create_case_insensitive_test_spreadsheet(self):
         """
         Create a test spreadsheet with case differences in select_one values.
@@ -325,8 +368,6 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test that validation works with case-insensitive matching for select_one values.
         """
-        self.create_case_insensitive_test_spreadsheet()
-        
         with open('api/test_data/test_xlsform.xlsx', 'rb') as xlsform_file:
             with open('api/test_data/case_insensitive_spreadsheet.xlsx', 'rb') as spreadsheet_file:
                 response = self.client.post(
@@ -341,4 +382,22 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['result'], 'valid')
         self.assertNotIn('errors', response.data)
->>>>>>> 8b4c708 (Add case-insensitive validation for select_one and select_multiple values)
+    
+    def test_integer_choice_validation(self):
+        """
+        Test that validation works with integer choice values.
+        """
+        with open('api/test_data/test_xlsform_integer_choices.xlsx', 'rb') as xlsform_file:
+            with open('api/test_data/integer_choice_spreadsheet.xlsx', 'rb') as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        'xlsform_file': xlsform_file,
+                        'spreadsheet_file': spreadsheet_file
+                    },
+                    format='multipart'
+                )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result'], 'valid')
+        self.assertNotIn('errors', response.data)
