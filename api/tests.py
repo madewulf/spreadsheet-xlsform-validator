@@ -48,6 +48,10 @@ class SpreadsheetValidationTests(TestCase):
 
         self.create_test_xlsform_with_aliases()
         self.create_alias_test_spreadsheet()
+        
+        self.create_test_xlsform_with_regex_constraints()
+        self.create_valid_regex_test_spreadsheet()
+        self.create_invalid_regex_test_spreadsheet()
 
     def create_test_xlsform(self):
         """
@@ -474,3 +478,80 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
+        
+    def create_test_xlsform_with_regex_constraints(self):
+        """
+        Create a test XLSForm with regex constraints.
+        """
+        wb = openpyxl.Workbook()
+        survey = wb.active
+        survey.title = 'survey'
+
+        survey.append(['type', 'name', 'label', 'required', 'constraint'])
+        survey.append(['text', 'month_code', 'Month Code', 'yes', "regex(.,'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\\d{2}$')"])
+        survey.append(['text', 'simple_code', 'Simple Code', 'yes', "regex(.,'^[a-zA-Z0-9]{2}$')"])
+        survey.append(['text', 'name', 'Name', 'yes', ''])
+
+        choices = wb.create_sheet('choices')
+        choices.append(['list_name', 'name', 'label'])
+
+        wb.save('api/test_data/test_xlsform_with_regex.xlsx')
+        
+    def create_valid_regex_test_spreadsheet(self):
+        """
+        Create a valid test spreadsheet with regex constraint values.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+
+        ws.append(['month_code', 'simple_code', 'name'])
+        ws.append(['Jan-01', 'A1', 'John Doe'])
+        ws.append(['Feb-15', 'B2', 'Jane Smith'])
+        ws.append(['Dec-31', 'Z9', 'Alex Johnson'])
+
+        wb.save('api/test_data/valid_regex_spreadsheet.xlsx')
+
+    def create_invalid_regex_test_spreadsheet(self):
+        """
+        Create an invalid test spreadsheet with regex constraint violations.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+
+        ws.append(['month_code', 'simple_code', 'name'])
+        ws.append(['January-01', 'A1', 'John Doe'])  # Invalid month format
+        ws.append(['Feb-1', 'ABC', 'Jane Smith'])    # Invalid day format and code length
+        ws.append(['13-31', '1A', 'Alex Johnson'])   # Invalid month number
+
+        wb.save('api/test_data/invalid_regex_spreadsheet.xlsx')
+        
+    def test_valid_regex_constraint_validation(self):
+        """
+        Test that validation passes with valid regex constraint values.
+        """
+        with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
+            with open("api/test_data/valid_regex_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertNotIn("errors", response.data)
+
+    def test_invalid_regex_constraint_validation(self):
+        """
+        Test that validation fails with invalid regex constraint values.
+        """
+        with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
+            with open("api/test_data/invalid_regex_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "invalid")
+        self.assertIn("errors", response.data)
+        self.assertTrue(len(response.data["errors"]) > 0)
+        constraint_errors = [e for e in response.data["errors"] if e["error_type"] == "error_constraint_unsatisfied"]
+        self.assertTrue(len(constraint_errors) > 0)
