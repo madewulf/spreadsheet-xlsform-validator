@@ -43,6 +43,9 @@ class SpreadsheetValidationTests(TestCase):
         self.create_case_insensitive_test_spreadsheet()
 
         self.create_integer_choice_test_spreadsheet()
+        
+        self.create_test_xlsform_with_aliases()
+        self.create_alias_test_spreadsheet()
 
     def create_test_xlsform(self):
         """
@@ -382,3 +385,53 @@ class SpreadsheetValidationTests(TestCase):
 
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertNotIn("errors", response.data)
+                
+    def create_test_xlsform_with_aliases(self):
+        """
+        Create a test XLSForm file with alias column in choices.
+        """
+        wb = openpyxl.Workbook()
+
+        survey = wb.active
+        survey.title = "survey"
+
+        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(["integer", "age", "Age", "yes", ". < 150"])
+        survey.append(["select_one gender", "gender", "Gender", "yes", ""])
+        survey.append(["text", "name", "Name", "yes", ""])
+
+        choices = wb.create_sheet("choices")
+        choices.append(["list_name", "name", "label", "alias"])
+        choices.append(["gender", "m", "Male", "man"])
+        choices.append(["gender", "f", "Female", "woman"])
+        choices.append(["gender", "o", "Other", "other_option"])
+
+        wb.save("api/test_data/test_xlsform_with_aliases.xlsx")
+        
+    def create_alias_test_spreadsheet(self):
+        """
+        Create a test spreadsheet using alias values.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+
+        ws.append(["age", "gender", "name"])
+        ws.append([25, "man", "John Doe"])  # using alias "man" instead of "m"
+        ws.append([30, "woman", "Jane Smith"])  # using alias "woman" instead of "f" 
+        ws.append([45, "other_option", "Alex Johnson"])  # using alias "other_option"
+
+        wb.save("api/test_data/alias_test_spreadsheet.xlsx")
+        
+    def test_alias_validation(self):
+        """
+        Test that validation works with alias values.
+        """
+        with open("api/test_data/test_xlsform_with_aliases.xlsx", "rb") as xlsform_file:
+            with open("api/test_data/alias_test_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertNotIn("errors", response.data)
