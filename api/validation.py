@@ -23,6 +23,7 @@ class XLSFormValidator:
         self.required_questions = set()
         self.choice_lists = {}
         self.question_labels = {}  # Map labels to question names
+        self.choice_aliases = {}  # Map list_name to dict of alias -> choice_value
 
     def parse_xlsform(self, xlsform_file) -> bool:
         """
@@ -101,7 +102,7 @@ class XLSFormValidator:
     
     def _process_choices_sheet(self):
         """
-        Process the choices sheet to extract choice lists.
+        Process the choices sheet to extract choice lists and aliases.
         """
         if 'list_name' not in self.choices_sheet.columns or 'name' not in self.choices_sheet.columns:
             return
@@ -115,8 +116,13 @@ class XLSFormValidator:
             
             if list_name not in self.choice_lists:
                 self.choice_lists[list_name] = []
+                self.choice_aliases[list_name] = {}
                 
             self.choice_lists[list_name].append(choice_value)
+            
+            if 'alias' in self.choices_sheet.columns and not pd.isna(row.get('alias')):
+                alias_value = row['alias']
+                self.choice_aliases[list_name][alias_value] = choice_value
     
     def validate_spreadsheet(self, spreadsheet_file, xlsform_data=None) -> Dict[str, Any]:
         """
@@ -286,7 +292,12 @@ class XLSFormValidator:
             if list_name and list_name in self.choice_lists:
                 value_lower = value.lower()
                 choices_lower = [str(choice).lower() for choice in self.choice_lists[list_name]]
-                if value_lower not in choices_lower:
+                
+                aliases_lower = {}
+                if list_name in self.choice_aliases:
+                    aliases_lower = {str(alias).lower(): choice for alias, choice in self.choice_aliases[list_name].items()}
+                
+                if value_lower not in choices_lower and value_lower not in aliases_lower:
                     return f"Value '{value}' is not a valid choice for select_one question '{question_name}'"
             return None
         
@@ -294,8 +305,13 @@ class XLSFormValidator:
             if list_name and list_name in self.choice_lists:
                 values = [v.strip().lower() for v in value.split()]
                 choices_lower = [str(choice).lower() for choice in self.choice_lists[list_name]]
+                
+                aliases_lower = set()
+                if list_name in self.choice_aliases:
+                    aliases_lower = {str(alias).lower() for alias in self.choice_aliases[list_name].keys()}
+                
                 for v in values:
-                    if v not in choices_lower:
+                    if v not in choices_lower and v not in aliases_lower:
                         return f"Value '{v}' is not a valid choice for select_multiple question '{question_name}'"
             return None
         
