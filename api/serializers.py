@@ -70,3 +70,7 @@ class ValidationResultSerializer(serializers.Serializer):
         required=False,
         help_text="List of validation errors if result is 'invalid'."
     )
+    download_id = serializers.CharField(
+        required=False,
+        help_text="ID for downloading the highlighted Excel file with errors."
+    )

@@ -40,6 +40,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 resultsHeader.className = 'card-header bg-danger text-white';
                 invalidResult.classList.remove('d-none');
                 
+                const downloadContainer = document.getElementById('download-link-container');
+                const downloadLink = document.getElementById('download-link');
+                if (data.download_id) {
+                    downloadLink.href = `/api/validate/download/?id=${data.download_id}`;
+                    downloadContainer.classList.remove('d-none');
+                } else {
+                    downloadContainer.classList.add('d-none');
+                }
+                
                 errorsTableBody.innerHTML = '';
                 
                 data.errors.forEach(error => {
