@@ -353,6 +353,23 @@ class XLSFormValidator:
             Optional[str]: Error message if validation fails, None otherwise
         """
         
+        regex_pattern = r'^regex\(\s*\.\s*,\s*[\'"](.*?)[\'"]\s*\)$'
+
+        regex_match = re.match(regex_pattern, constraint.strip())
+
+        if regex_match:
+            pattern_str = regex_match.group(1)
+            try:
+                str_value = str(value)
+
+                match_result = re.match(pattern_str, str_value)
+                print(str_value, match_result)
+                if not match_result:
+                    return f"Constraint '{constraint}' is not satisfied for value '{value}'"
+                return None
+            except re.error as e:
+                return f"Invalid regex pattern in constraint '{constraint}': {str(e)}"
+        
         if self.question_types.get(question_name) == 'integer':
             try:
                 value = int(value)
