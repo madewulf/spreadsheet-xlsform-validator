@@ -101,3 +101,71 @@ The API validates that:
 - Values for decimal questions are valid decimals
 - Required questions have values
 - Values satisfy any constraints defined in the XLSForm
+
+## AWS Elastic Beanstalk Deployment
+
+### Prerequisites
+
+1. Install AWS CLI:
+```bash
+pip install awscli
+```
+
+2. Configure AWS credentials:
+```bash
+aws configure
+```
+
+3. Install EB CLI:
+```bash
+pip install awsebcli
+```
+
+### Deployment Steps
+
+1. Initialize Elastic Beanstalk application:
+```bash
+eb init --platform python-3.9 --region us-east-1
+```
+
+2. Create environment:
+```bash
+eb create production --database.engine postgres --database.username ebroot
+```
+
+3. Set environment variables:
+```bash
+eb setenv DEBUG=False SECRET_KEY=your-secret-key-here ALLOWED_HOSTS=.elasticbeanstalk.com
+eb setenv DB_ENGINE=django.db.backends.postgresql DB_NAME=ebdb DB_USER=ebroot DB_PASSWORD=your-db-password DB_HOST=your-rds-endpoint DB_PORT=5432
+```
+
+4. Deploy application:
+```bash
+eb deploy
+```
+
+5. Open application:
+```bash
+eb open
+```
+
+### Environment Variables
+
+Set these environment variables in the Elastic Beanstalk console:
+
+- `DEBUG`: Set to `False` for production
+- `SECRET_KEY`: Generate a secure secret key for Django
+- `ALLOWED_HOSTS`: Set to your domain (e.g., `.elasticbeanstalk.com`)
+- `DB_ENGINE`: `django.db.backends.postgresql` (recommended for production)
+- `DB_NAME`: Database name (default: `ebdb`)
+- `DB_USER`: Database username
+- `DB_PASSWORD`: Database password  
+- `DB_HOST`: RDS endpoint
+- `DB_PORT`: Database port (default: `5432`)
+
+### Notes
+
+- The application uses PostgreSQL in production (recommended over SQLite)
+- Static files are served using WhiteNoise
+- Database migrations run automatically on deployment
+- A default admin user is created (username: `admin`, password: `changeme123`) - change this immediately
