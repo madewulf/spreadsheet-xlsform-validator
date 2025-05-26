@@ -354,24 +354,16 @@ class XLSFormValidator:
         """
         
         regex_pattern = r'^regex\(\s*\.\s*,\s*[\'"](.*?)[\'"]\s*\)$'
+
         regex_match = re.match(regex_pattern, constraint.strip())
+
         if regex_match:
             pattern_str = regex_match.group(1)
             try:
                 str_value = str(value)
-                
-                if "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec" in pattern_str and "\\d{2}" in pattern_str:
-                    month_pattern = r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}$'
-                    match_result = re.match(month_pattern, str_value)
-                elif "[a-zA-Z0-9]{2}" in pattern_str:
-                    alpha_pattern = r'^[a-zA-Z0-9]{2}$'
-                    match_result = re.match(alpha_pattern, str_value)
-                elif "[A-Z]" in pattern_str:
-                    upper_pattern = r'^[A-Z].*'
-                    match_result = re.match(upper_pattern, str_value)
-                else:
-                    match_result = re.match(pattern_str, str_value)
-                
+
+                match_result = re.match(pattern_str, str_value)
+                print(str_value, match_result)
                 if not match_result:
                     return f"Constraint '{constraint}' is not satisfied for value '{value}'"
                 return None
