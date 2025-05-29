@@ -8,6 +8,9 @@ from typing import Dict, List, Any, Tuple, Optional
 import re
 from elementpath import XPath1Parser, XPathContext
 from xml.etree.ElementTree import Element
+import json
+from pyxform import create_survey_from_xls, errors
+
 
 ERROR_TYPE_MISMATCH = "type_mismatch"
 ERROR_CONSTRAINT_UNSATISFIED = "error_constraint_unsatisfied"
@@ -29,7 +32,7 @@ class XLSFormValidator:
 
     def parse_xlsform(self, xlsform_file) -> bool:
         """
-        Parse the XLSForm file to extract survey and choices sheets.
+        Parse the XLSForm file using pyxform to extract survey structure.
         
         Args:
             xlsform_file: The XLSForm file object
@@ -40,22 +43,22 @@ class XLSFormValidator:
         try:
             file_path = self._save_temp_file(xlsform_file)
             
-            xls = pd.ExcelFile(file_path)
+            survey = create_survey_from_xls(file_path)
+            survey_json = survey.to_json()
             
-            if 'survey' not in xls.sheet_names or 'choices' not in xls.sheet_names:
-                return False
-                
-            self.survey_sheet = pd.read_excel(xls, 'survey')
+            # Parse the JSON to extract data structures for validation
+            parsed_survey = json.loads(survey_json)
             
-            self.choices_sheet = pd.read_excel(xls, 'choices')
+            self._extract_questions_from_pyxform(parsed_survey)
             
-            self._process_survey_sheet()
-            
-            self._process_choices_sheet()
+            self._extract_choices_from_pyxform(parsed_survey)
             
             os.remove(file_path)
             
             return True
+        except errors.PyXFormError as e:
+            print(f"Error parsing XLSForm with pyxform: {str(e)}")
+            return False
         except Exception as e:
             print(f"Error parsing XLSForm: {str(e)}")
             return False
@@ -76,55 +79,73 @@ class XLSFormValidator:
                 destination.write(chunk)
         return file_path
     
-    def _process_survey_sheet(self):
+    def _extract_questions_from_pyxform(self, parsed_survey: dict):
         """
-        Process the survey sheet to extract question types and constraints.
-        """
-        if 'name' not in self.survey_sheet.columns or 'type' not in self.survey_sheet.columns:
-            return
+        Extract question types, labels, constraints, and required fields from pyxform structure.
         
-        for _, row in self.survey_sheet.iterrows():
-            if pd.isna(row.get('name')) or pd.isna(row.get('type')):
-                continue
-                
-            name = row['name']
-            q_type = row['type']
-            
-            self.question_types[name] = q_type
-            
-            if 'label' in self.survey_sheet.columns and not pd.isna(row.get('label')):
-                label = row['label']
-                self.question_labels[label] = name
-            
-            if 'required' in self.survey_sheet.columns and row.get('required') == 'yes':
-                self.required_questions.add(name)
-                
-            if 'constraint' in self.survey_sheet.columns and not pd.isna(row.get('constraint')):
-                self.question_constraints[name] = row['constraint']
-    
-    def _process_choices_sheet(self):
+        Args:
+            parsed_survey: The parsed pyxform JSON structure
         """
-        Process the choices sheet to extract choice lists and aliases.
-        """
-        if 'list_name' not in self.choices_sheet.columns or 'name' not in self.choices_sheet.columns:
+        if 'children' not in parsed_survey:
             return
             
-        for _, row in self.choices_sheet.iterrows():
-            if pd.isna(row.get('list_name')) or pd.isna(row.get('name')):
-                continue
-                
-            list_name = row['list_name']
-            choice_value = row['name']
+        for child in parsed_survey['children']:
+            self._process_question_node(child)
+    
+    def _process_question_node(self, node: dict):
+        """
+        Process a single question node from pyxform structure.
+        
+        Args:
+            node: A question node from the pyxform children array
+        """
+        if 'name' not in node or 'type' not in node:
+            return
             
+        name = node['name']
+        q_type = node['type']
+        
+        if name == 'meta' or q_type == 'group':
+            if 'children' in node:
+                for child in node['children']:
+                    self._process_question_node(child)
+            return
+            
+        self.question_types[name] = q_type
+        
+        if 'label' in node:
+            label = node['label']
+            self.question_labels[label] = name
+        
+        if 'bind' in node and node['bind'].get('required') == 'yes':
+            self.required_questions.add(name)
+            
+        if 'bind' in node and 'constraint' in node['bind']:
+            self.question_constraints[name] = node['bind']['constraint']
+    
+    def _extract_choices_from_pyxform(self, parsed_survey: dict):
+        """
+        Extract choice lists from pyxform structure.
+        
+        Args:
+            parsed_survey: The parsed pyxform JSON structure
+        """
+        if 'choices' not in parsed_survey:
+            return
+            
+        for list_name, choices in parsed_survey['choices'].items():
             if list_name not in self.choice_lists:
                 self.choice_lists[list_name] = []
                 self.choice_aliases[list_name] = {}
                 
-            self.choice_lists[list_name].append(choice_value)
-            
-            if 'alias' in self.choices_sheet.columns and not pd.isna(row.get('alias')):
-                alias_value = row['alias']
-                self.choice_aliases[list_name][alias_value] = choice_value
+            for choice in choices:
+                if 'name' in choice:
+                    choice_value = choice['name']
+                    self.choice_lists[list_name].append(choice_value)
+                    
+                    if 'alias' in choice:
+                        alias_value = choice['alias']
+                        self.choice_aliases[list_name][alias_value] = choice_value
     
     def validate_spreadsheet(self, spreadsheet_file, xlsform_data=None) -> Dict[str, Any]:
         """
@@ -138,10 +159,54 @@ class XLSFormValidator:
             Dict: Validation result with 'is_valid' flag and 'errors' list if invalid
         """
         if xlsform_data:
-            self.survey_sheet = xlsform_data.get('survey')
-            self.choices_sheet = xlsform_data.get('choices')
-            self._process_survey_sheet()
-            self._process_choices_sheet()
+            self.question_types = {}
+            self.question_constraints = {}
+            self.required_questions = set()
+            self.choice_lists = {}
+            self.question_labels = {}
+            self.choice_aliases = {}
+            
+            if isinstance(xlsform_data, dict):
+                survey_df = xlsform_data.get('survey')
+                choices_df = xlsform_data.get('choices')
+                
+                if survey_df is not None and isinstance(survey_df, pd.DataFrame):
+                    for _, row in survey_df.iterrows():
+                        if pd.isna(row.get('name')) or pd.isna(row.get('type')):
+                            continue
+                            
+                        name = row['name']
+                        q_type = row['type']
+                        
+                        self.question_types[name] = q_type
+                        
+                        if 'label' in survey_df.columns and not pd.isna(row.get('label')):
+                            label = row['label']
+                            self.question_labels[label] = name
+                        
+                        if 'required' in survey_df.columns and row.get('required') == 'yes':
+                            self.required_questions.add(name)
+                            
+                        if 'constraint' in survey_df.columns and not pd.isna(row.get('constraint')):
+                            self.question_constraints[name] = row['constraint']
+                
+                if choices_df is not None and isinstance(choices_df, pd.DataFrame):
+                    for _, row in choices_df.iterrows():
+                        if pd.isna(row.get('list_name')) or pd.isna(row.get('name')):
+                            continue
+                            
+                        list_name = row['list_name']
+                        choice_value = row['name']
+                        
+                        if list_name not in self.choice_lists:
+                            self.choice_lists[list_name] = []
+                            self.choice_aliases[list_name] = {}
+                            
+                        self.choice_lists[list_name].append(choice_value)
+                        
+                        if 'alias' in choices_df.columns and not pd.isna(row.get('alias')):
+                            alias_value = row['alias']
+                            self.choice_aliases[list_name][alias_value] = choice_value
         
         try:
             file_path = self._save_temp_file(spreadsheet_file)
