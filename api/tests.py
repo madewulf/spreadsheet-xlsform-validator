@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 import pandas as pd
 import openpyxl
+from .validation import XLSFormValidator
 
 
 class SpreadsheetValidationTests(TestCase):
@@ -686,3 +687,38 @@ class SpreadsheetValidationTests(TestCase):
             if e["error_type"] == "error_constraint_unsatisfied"
         ]
         self.assertTrue(len(constraint_errors) > 0)
+        
+    def test_regex_validation_with_leading_zeros(self):
+        """
+        Test that numeric values with leading zeros are correctly validated against regex patterns.
+        """
+        validator = XLSFormValidator()
+        validator.question_types = {'code_ets': 'text'}
+        validator.constraints = {'code_ets': "regex(.,'^([0-9]{5})$')"}
+        
+        # Test that 1652.0 gets formatted as 01652 for 5-digit regex
+        error = validator._validate_constraint(1652.0, "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error)  # Should pass validation
+        
+        error = validator._validate_constraint(123.0, "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error)  # Should pass validation
+        
+        error = validator._validate_constraint("01234", "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error)  # Should pass validation
+        
+    def test_regex_constraint_numeric_formatting(self):
+        """
+        Test specific regex constraint handling for numeric values.
+        """
+        validator = XLSFormValidator()
+        validator.question_types = {'code_ets': 'text'}
+        validator.constraints = {'code_ets': "regex(.,'^([0-9]{5})$')"}
+        
+        error = validator._validate_constraint(1652.0, "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error, "Validation should pass for 1652.0 with 5-digit regex pattern")
+        
+        error = validator._validate_constraint(123.0, "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error, "Validation should pass for 123.0 with 5-digit regex pattern")
+        
+        error = validator._validate_constraint("01234", "regex(.,'^([0-9]{5})$')", 'code_ets')
+        self.assertIsNone(error, "Validation should pass for '01234' with 5-digit regex pattern")

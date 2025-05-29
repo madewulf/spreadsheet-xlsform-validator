@@ -30,6 +30,15 @@
                             </div>
                             <button type="submit" class="btn btn-primary">Validate</button>
                         </form>
+                        
+                        <div class="mt-4">
+                            <h5>Example Files</h5>
+                            <p>Download these example files to test the validator:</p>
+                            <ul>
+                                <li><a href="{% url 'api:spreadsheetvalidation-download-example' %}?file=xlsform" class="btn btn-sm btn-outline-secondary">Download Example XLSForm</a></li>
+                                <li><a href="{% url 'api:spreadsheetvalidation-download-example' %}?file=spreadsheet" class="btn btn-sm btn-outline-secondary">Download Example Spreadsheet</a></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
