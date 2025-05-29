@@ -1,4 +1,4 @@
-[![Django CI](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml/badge.svg)](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml)
+[![Django CI](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml/badge.svg?branch=main)](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml)
 
 # Spreadsheet XLSForm Validator
 
