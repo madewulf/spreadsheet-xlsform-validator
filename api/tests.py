@@ -1,6 +1,7 @@
 """
 Tests for the XLSForm validator API.
 """
+
 import os
 import tempfile
 from django.test import TestCase
@@ -48,7 +49,7 @@ class SpreadsheetValidationTests(TestCase):
 
         self.create_test_xlsform_with_aliases()
         self.create_alias_test_spreadsheet()
-        
+
         self.create_test_xlsform_with_regex_constraints()
         self.create_valid_regex_test_spreadsheet()
         self.create_invalid_regex_test_spreadsheet()
@@ -146,7 +147,12 @@ class SpreadsheetValidationTests(TestCase):
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open("api/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -158,16 +164,25 @@ class SpreadsheetValidationTests(TestCase):
         Test validation with a spreadsheet containing type mismatches.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_type_mismatch.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "invalid")
         self.assertIn("errors", response.data)
 
-        type_mismatch_errors = [e for e in response.data["errors"] if e["error_type"] == "type_mismatch"]
+        type_mismatch_errors = [
+            e for e in response.data["errors"] if e["error_type"] == "type_mismatch"
+        ]
         self.assertTrue(len(type_mismatch_errors) > 0)
 
     def test_constraint_unsatisfied_error(self):
@@ -175,16 +190,27 @@ class SpreadsheetValidationTests(TestCase):
         Test validation with a spreadsheet containing constraint violations.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_constraint.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/invalid_constraint.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "invalid")
         self.assertIn("errors", response.data)
 
-        constraint_errors = [e for e in response.data["errors"] if e["error_type"] == "error_constraint_unsatisfied"]
+        constraint_errors = [
+            e
+            for e in response.data["errors"]
+            if e["error_type"] == "error_constraint_unsatisfied"
+        ]
         self.assertTrue(len(constraint_errors) > 0)
 
     def test_value_required_error(self):
@@ -194,14 +220,23 @@ class SpreadsheetValidationTests(TestCase):
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open("api/test_data/invalid_required.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "invalid")
         self.assertIn("errors", response.data)
 
-        required_errors = [e for e in response.data["errors"] if e["error_type"] == "error_value_required"]
+        required_errors = [
+            e
+            for e in response.data["errors"]
+            if e["error_type"] == "error_value_required"
+        ]
         self.assertTrue(len(required_errors) > 0)
 
     def create_valid_test_spreadsheet_with_labels(self):
@@ -239,9 +274,16 @@ class SpreadsheetValidationTests(TestCase):
         Test validation with a spreadsheet using labels as column headers.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/valid_spreadsheet_labels.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/valid_spreadsheet_labels.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -255,7 +297,12 @@ class SpreadsheetValidationTests(TestCase):
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open("api/test_data/mixed_spreadsheet.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -267,9 +314,16 @@ class SpreadsheetValidationTests(TestCase):
         Test downloading highlighted Excel file for invalid spreadsheet.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_type_mismatch.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -277,13 +331,18 @@ class SpreadsheetValidationTests(TestCase):
         self.assertIn("download_id", response.data)
 
         download_url = reverse("validate-download")
-        download_response = self.client.get(f"{download_url}?id={response.data['download_id']}")
+        download_response = self.client.get(
+            f"{download_url}?id={response.data['download_id']}"
+        )
 
         self.assertEqual(download_response.status_code, 200)
         self.assertEqual(
-            download_response["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            download_response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        self.assertIn("highlighted_spreadsheet.xlsx", download_response["Content-Disposition"])
+        self.assertIn(
+            "highlighted_spreadsheet.xlsx", download_response["Content-Disposition"]
+        )
 
     def create_test_xlsform_with_integer_choices(self):
         """
@@ -329,25 +388,27 @@ class SpreadsheetValidationTests(TestCase):
     def create_excel_date_format_spreadsheet(self):
         wb = openpyxl.Workbook()
         survey = wb.active
-        survey.title = 'survey'
+        survey.title = "survey"
 
-        survey.append(['type', 'name', 'label', 'required', 'constraint'])
-        survey.append(['date', 'last_dispensiation_date', 'Last Dispensation Date', 'yes', ''])
-        survey.append(['text', 'name', 'Name', 'yes', ''])
+        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(
+            ["date", "last_dispensiation_date", "Last Dispensation Date", "yes", ""]
+        )
+        survey.append(["text", "name", "Name", "yes", ""])
 
-        choices = wb.create_sheet('choices')
-        choices.append(['list_name', 'name', 'label'])
+        choices = wb.create_sheet("choices")
+        choices.append(["list_name", "name", "label"])
 
-        wb.save('api/test_data/test_xlsform_with_date.xlsx')
+        wb.save("api/test_data/test_xlsform_with_date.xlsx")
 
         wb = openpyxl.Workbook()
         ws = wb.active
 
-        ws.append(['last_dispensiation_date', 'name'])
-        ws.append(['2024-09-02 00:00:00', 'John Doe'])
-        ws.append(['2023-05-15 00:00:00', 'Jane Smith'])
+        ws.append(["last_dispensiation_date", "name"])
+        ws.append(["2024-09-02 00:00:00", "John Doe"])
+        ws.append(["2023-05-15 00:00:00", "Jane Smith"])
 
-        wb.save('api/test_data/excel_date_spreadsheet.xlsx')
+        wb.save("api/test_data/excel_date_spreadsheet.xlsx")
 
     def create_case_insensitive_test_spreadsheet(self):
         """
@@ -369,9 +430,16 @@ class SpreadsheetValidationTests(TestCase):
         Test that validation works with case-insensitive matching for select_one values.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/case_insensitive_spreadsheet.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/case_insensitive_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -383,38 +451,59 @@ class SpreadsheetValidationTests(TestCase):
         Test downloading highlighted Excel file for invalid spreadsheet.
         """
         with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_type_mismatch.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(response.data["result"], "invalid")
                 self.assertIn("download_id", response.data)
                 download_url = reverse("validate-download")
-                download_response = self.client.get(f"{download_url}?id={response.data['download_id']}")
+                download_response = self.client.get(
+                    f"{download_url}?id={response.data['download_id']}"
+                )
 
                 self.assertEqual(download_response.status_code, 200)
                 self.assertEqual(
                     download_response["Content-Type"],
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
-                self.assertIn("highlighted_spreadsheet.xlsx", download_response["Content-Disposition"])
+                self.assertIn(
+                    "highlighted_spreadsheet.xlsx",
+                    download_response["Content-Disposition"],
+                )
 
     def test_integer_choice_validation(self):
         """
         Test that validation works with integer choice values.
         """
-        with open("api/test_data/test_xlsform_integer_choices.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/integer_choice_spreadsheet.xlsx", "rb") as spreadsheet_file:
+        with open(
+            "api/test_data/test_xlsform_integer_choices.xlsx", "rb"
+        ) as xlsform_file:
+            with open(
+                "api/test_data/integer_choice_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
                 self.assertEqual(response.data["result"], "valid")
 
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertNotIn("errors", response.data)
-                
+
     def create_test_xlsform_with_aliases(self):
         """
         Create a test XLSForm file with alias column in choices.
@@ -436,7 +525,7 @@ class SpreadsheetValidationTests(TestCase):
         choices.append(["gender", "o", "Other", "other_option"])
 
         wb.save("api/test_data/test_xlsform_with_aliases.xlsx")
-        
+
     def create_alias_test_spreadsheet(self):
         """
         Create a test spreadsheet using alias values.
@@ -446,57 +535,81 @@ class SpreadsheetValidationTests(TestCase):
 
         ws.append(["age", "gender", "name"])
         ws.append([25, "man", "John Doe"])  # using alias "man" instead of "m"
-        ws.append([30, "woman", "Jane Smith"])  # using alias "woman" instead of "f" 
+        ws.append([30, "woman", "Jane Smith"])  # using alias "woman" instead of "f"
         ws.append([45, "other_option", "Alex Johnson"])  # using alias "other_option"
 
         wb.save("api/test_data/alias_test_spreadsheet.xlsx")
-        
+
     def test_alias_validation(self):
         """
         Test that validation works with alias values.
         """
         with open("api/test_data/test_xlsform_with_aliases.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/alias_test_spreadsheet.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/alias_test_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
-        
+
     def test_excel_date_format_validation(self):
         """
         Test that validation works with Excel date format (YYYY-MM-DD HH:MM:SS).
         """
         with open("api/test_data/test_xlsform_with_date.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/excel_date_spreadsheet.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/excel_date_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
-        
+
     def create_test_xlsform_with_regex_constraints(self):
         """
         Create a test XLSForm with regex constraints.
         """
         wb = openpyxl.Workbook()
         survey = wb.active
-        survey.title = 'survey'
+        survey.title = "survey"
 
-        survey.append(['type', 'name', 'label', 'required', 'constraint'])
-        survey.append(['text', 'month_code', 'Month Code', 'yes', "regex(.,'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\\d{2}$')"])
-        survey.append(['text', 'simple_code', 'Simple Code', 'yes', "regex(.,'^[a-zA-Z0-9]{2}$')"])
-        survey.append(['text', 'name', 'Name', 'yes', ''])
+        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(
+            [
+                "text",
+                "month_code",
+                "Month Code",
+                "yes",
+                "regex(.,'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\\d{2}$')",
+            ]
+        )
+        survey.append(
+            ["text", "simple_code", "Simple Code", "yes", "regex(.,'^[a-zA-Z0-9]{2}$')"]
+        )
+        survey.append(["text", "name", "Name", "yes", ""])
 
-        choices = wb.create_sheet('choices')
-        choices.append(['list_name', 'name', 'label'])
+        choices = wb.create_sheet("choices")
+        choices.append(["list_name", "name", "label"])
 
-        wb.save('api/test_data/test_xlsform_with_regex.xlsx')
-        
+        wb.save("api/test_data/test_xlsform_with_regex.xlsx")
+
     def create_valid_regex_test_spreadsheet(self):
         """
         Create a valid test spreadsheet with regex constraint values.
@@ -504,12 +617,12 @@ class SpreadsheetValidationTests(TestCase):
         wb = openpyxl.Workbook()
         ws = wb.active
 
-        ws.append(['month_code', 'simple_code', 'name'])
-        ws.append(['Jan-01', 'A1', 'John Doe'])
-        ws.append(['Feb-15', 'B2', 'Jane Smith'])
-        ws.append(['Dec-31', 'Z9', 'Alex Johnson'])
+        ws.append(["month_code", "simple_code", "name"])
+        ws.append(["Jan-01", "A1", "John Doe"])
+        ws.append(["Feb-15", "B2", "Jane Smith"])
+        ws.append(["Dec-31", "Z9", "Alex Johnson"])
 
-        wb.save('api/test_data/valid_regex_spreadsheet.xlsx')
+        wb.save("api/test_data/valid_regex_spreadsheet.xlsx")
 
     def create_invalid_regex_test_spreadsheet(self):
         """
@@ -518,21 +631,28 @@ class SpreadsheetValidationTests(TestCase):
         wb = openpyxl.Workbook()
         ws = wb.active
 
-        ws.append(['month_code', 'simple_code', 'name'])
-        ws.append(['January-01', 'A1', 'John Doe'])  # Invalid month format
-        ws.append(['Feb-1', 'ABC', 'Jane Smith'])    # Invalid day format and code length
-        ws.append(['13-31', '1A', 'Alex Johnson'])   # Invalid month number
+        ws.append(["month_code", "simple_code", "name"])
+        ws.append(["January-01", "A1", "John Doe"])  # Invalid month format
+        ws.append(["Feb-1", "ABC", "Jane Smith"])  # Invalid day format and code length
+        ws.append(["13-31", "1A", "Alex Johnson"])  # Invalid month number
 
-        wb.save('api/test_data/invalid_regex_spreadsheet.xlsx')
-        
+        wb.save("api/test_data/invalid_regex_spreadsheet.xlsx")
+
     def test_valid_regex_constraint_validation(self):
         """
         Test that validation passes with valid regex constraint values.
         """
         with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/valid_regex_spreadsheet.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/valid_regex_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -544,14 +664,25 @@ class SpreadsheetValidationTests(TestCase):
         Test that validation fails with invalid regex constraint values.
         """
         with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_regex_spreadsheet.xlsx", "rb") as spreadsheet_file:
+            with open(
+                "api/test_data/invalid_regex_spreadsheet.xlsx", "rb"
+            ) as spreadsheet_file:
                 response = self.client.post(
-                    self.url, {"xlsform_file": xlsform_file, "spreadsheet_file": spreadsheet_file}, format="multipart"
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
                 )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["result"], "invalid")
         self.assertIn("errors", response.data)
         self.assertTrue(len(response.data["errors"]) > 0)
-        constraint_errors = [e for e in response.data["errors"] if e["error_type"] == "error_constraint_unsatisfied"]
+        constraint_errors = [
+            e
+            for e in response.data["errors"]
+            if e["error_type"] == "error_constraint_unsatisfied"
+        ]
         self.assertTrue(len(constraint_errors) > 0)
