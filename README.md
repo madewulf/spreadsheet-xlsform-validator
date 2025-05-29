@@ -104,6 +104,29 @@ The API validates that:
 - Required questions have values
 - Values satisfy any constraints defined in the XLSForm
 
+## XLSForm Specification Limitations
+
+This validator implements core XLSForm functionality but does not yet support all features of the XLSForm specification. The following features are **not currently implemented**:
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| `relevant` column | ❌ Not implemented | Conditional logic to show/hide questions based on other responses |
+| `calculation` column | ❌ Not implemented | Automatic calculation of values based on other question responses |
+| Advanced constraint expressions | ⚠️ Partial | Complex XPath expressions may not be fully supported |
+| Repeat groups | ❌ Not implemented | Repeating sections of questions |
+| Advanced question types | ⚠️ Partial | Some specialized question types may not be validated |
+
+## Libraries Used
+
+This validator uses the following libraries:
+- **pyxform**: For parsing XLSForm files and converting them to internal format
+- **elementpath (XPath1Parser)**: For validating XPath constraint expressions
+- **pandas & openpyxl**: For processing Excel and CSV files
+
+## Try the Validator Online
+
+You can test this validator online at: https://data-validator.bluesquare.org/
+
 ## AWS Elastic Beanstalk Deployment
 
 ### Prerequisites
