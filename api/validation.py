@@ -480,7 +480,7 @@ class XLSFormValidator:
                     digit_match = re.search(digit_pattern, pattern_str)
                     if digit_match:
                         expected_digits = int(digit_match.group(2))
-                        str_value = f"{int(value):0{expected_digits}d}"
+                        str_value = f"{int(value):0{expected_digits}d}" # Pad with zeros if necessary: this feels hackish, but works for now
                     else:
                         str_value = str(int(value)) if value == int(value) else str(value)
                 else:
