@@ -1,3 +1,5 @@
+[![Django CI](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml/badge.svg)](https://github.com/madewulf/spreadsheet-xlsform-validator/actions/workflows/django.yml)
+
 # Spreadsheet XLSForm Validator
 
 A Django REST Framework API for validating spreadsheet data against XLSForm specifications.
