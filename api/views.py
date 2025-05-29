@@ -115,3 +115,29 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
             filename="highlighted_spreadsheet.xlsx",
         )
         return response
+        
+    @action(detail=False, methods=["get"])
+    def download_example(self, request):
+        """
+        Download example files for testing the validator.
+        """
+        file_type = request.GET.get("file")
+        
+        if file_type == "xlsform":
+            file_path = "test_data/file_active_validation_excel.xlsx"
+            filename = "example_xlsform.xlsx"
+        elif file_type == "spreadsheet":
+            file_path = "test_data/sample_validation_data_file_active.xlsx"
+            filename = "example_spreadsheet.xlsx"
+        else:
+            raise Http404("Invalid file type")
+        
+        if not os.path.exists(file_path):
+            raise Http404("Example file not found")
+        
+        response = FileResponse(
+            open(file_path, "rb"),
+            as_attachment=True,
+            filename=filename,
+        )
+        return response

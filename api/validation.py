@@ -475,9 +475,18 @@ class XLSFormValidator:
         if regex_match:
             pattern_str = regex_match.group(1)
             try:
-                str_value = str(value)
+                if isinstance(value, (int, float)) and not pd.isna(value):
+                    digit_pattern = r'^\^?\(?(\[0-9\]|\d)\{(\d+)\}'
+                    digit_match = re.search(digit_pattern, pattern_str)
+                    if digit_match:
+                        expected_digits = int(digit_match.group(2))
+                        str_value = f"{int(value):0{expected_digits}d}"
+                    else:
+                        str_value = str(int(value)) if value == int(value) else str(value)
+                else:
+                    str_value = str(value)
+                
                 match_result = re.match(pattern_str, str_value)
-                print(str_value, match_result)
                 if not match_result:
                     return f"Constraint '{constraint}' is not satisfied for value '{value}'"
                 return None
