@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(form);
         
-        fetch('/api/validate/', {
+        fetch('/validator/validate/', {
             method: 'POST',
             body: formData,
         })
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const downloadContainer = document.getElementById('download-link-container');
                 const downloadLink = document.getElementById('download-link');
                 if (data.download_id) {
-                    downloadLink.href = `/api/validate/download/?id=${data.download_id}`;
+                    downloadLink.href = `/validator/validate/download/?id=${data.download_id}`;
                     downloadContainer.classList.remove('d-none');
                 } else {
                     downloadContainer.classList.add('d-none');

@@ -23,9 +23,9 @@ class SpreadsheetValidationTests(TestCase):
         Set up test client and create test files.
         """
         self.client = APIClient()
-        self.url = reverse("validate-list")
+        self.url = reverse("django_xlsform_validator:validate-list")
 
-        os.makedirs("api/test_data", exist_ok=True)
+        os.makedirs("django_xlsform_validator/test_data", exist_ok=True)
 
         self.create_test_xlsform()
         self.create_test_xlsform_with_integer_choices()
@@ -79,7 +79,7 @@ class SpreadsheetValidationTests(TestCase):
         choices.append(["gender", "female", "Female"])
         choices.append(["gender", "other", "Other"])
 
-        wb.save("api/test_data/test_xlsform.xlsx")
+        wb.save("django_xlsform_validator/test_data/test_xlsform.xlsx")
 
     def create_valid_test_spreadsheet(self):
         """
@@ -94,7 +94,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "female", "Jane Smith", 65.0])
         ws.append([45, "other", "Alex Johnson", 80.2])
 
-        wb.save("api/test_data/valid_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/valid_spreadsheet.xlsx")
 
     def create_invalid_test_spreadsheet_type_mismatch(self):
         """
@@ -109,7 +109,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "unknown", "Jane Smith", 65.0])  # gender not in choices
         ws.append([45, "other", "Alex Johnson", "eighty"])  # weight should be decimal
 
-        wb.save("api/test_data/invalid_type_mismatch.xlsx")
+        wb.save("django_xlsform_validator/test_data/invalid_type_mismatch.xlsx")
 
     def create_invalid_test_spreadsheet_constraint(self):
         """
@@ -124,7 +124,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "female", "Jane Smith", -5.0])  # weight < 0
         ws.append([45, "other", "Alex Johnson", 80.2])
 
-        wb.save("api/test_data/invalid_constraint.xlsx")
+        wb.save("django_xlsform_validator/test_data/invalid_constraint.xlsx")
 
     def create_invalid_test_spreadsheet_required(self):
         """
@@ -139,14 +139,14 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, None, "Jane Smith", 65.0])  # missing gender
         ws.append([45, "other", None, 80.2])  # missing name
 
-        wb.save("api/test_data/invalid_required.xlsx")
+        wb.save("django_xlsform_validator/test_data/invalid_required.xlsx")
 
     def test_valid_spreadsheet(self):
         """
         Test validation with a valid spreadsheet.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
                     self.url,
                     {
@@ -164,9 +164,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test validation with a spreadsheet containing type mismatches.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+                "django_xlsform_validator/test_data/invalid_type_mismatch.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -190,9 +190,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test validation with a spreadsheet containing constraint violations.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/invalid_constraint.xlsx", "rb"
+                "django_xlsform_validator/test_data/invalid_constraint.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -218,8 +218,8 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test validation with a spreadsheet containing missing required values.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/invalid_required.xlsx", "rb") as spreadsheet_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/invalid_required.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
                     self.url,
                     {
@@ -253,7 +253,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "female", "Jane Smith", 65.0])
         ws.append([45, "other", "Alex Johnson", 80.2])
 
-        wb.save("api/test_data/valid_spreadsheet_labels.xlsx")
+        wb.save("django_xlsform_validator/test_data/valid_spreadsheet_labels.xlsx")
 
     def create_mixed_test_spreadsheet(self):
         """
@@ -268,15 +268,15 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "female", "Jane Smith", 65.0])
         ws.append([45, "other", "Alex Johnson", 80.2])
 
-        wb.save("api/test_data/mixed_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/mixed_spreadsheet.xlsx")
 
     def test_valid_spreadsheet_with_labels(self):
         """
         Test validation with a spreadsheet using labels as column headers.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/valid_spreadsheet_labels.xlsx", "rb"
+                "django_xlsform_validator/test_data/valid_spreadsheet_labels.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -295,8 +295,8 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test validation with a spreadsheet using both names and labels.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
-            with open("api/test_data/mixed_spreadsheet.xlsx", "rb") as spreadsheet_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/mixed_spreadsheet.xlsx", "rb") as spreadsheet_file:
                 response = self.client.post(
                     self.url,
                     {
@@ -314,9 +314,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test downloading highlighted Excel file for invalid spreadsheet.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+                "django_xlsform_validator/test_data/invalid_type_mismatch.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -331,7 +331,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.data["result"], "invalid")
         self.assertIn("download_id", response.data)
 
-        download_url = reverse("validate-download")
+        download_url = reverse("django_xlsform_validator:validate-download")
         download_response = self.client.get(
             f"{download_url}?id={response.data['download_id']}"
         )
@@ -369,7 +369,7 @@ class SpreadsheetValidationTests(TestCase):
         choices.append(["status", 2, "Inactive"])
         choices.append(["status", 3, "Pending"])
 
-        wb.save("api/test_data/test_xlsform_integer_choices.xlsx")
+        wb.save("django_xlsform_validator/test_data/test_xlsform_integer_choices.xlsx")
 
     def create_integer_choice_test_spreadsheet(self):
         """
@@ -384,7 +384,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, 2, "Jane Smith", 65.0])  # Integer choice value
         ws.append([45, 3, "Alex Johnson", 80.2])  # Integer choice value
 
-        wb.save("api/test_data/integer_choice_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/integer_choice_spreadsheet.xlsx")
 
     def create_excel_date_format_spreadsheet(self):
         wb = openpyxl.Workbook()
@@ -400,7 +400,7 @@ class SpreadsheetValidationTests(TestCase):
         choices = wb.create_sheet("choices")
         choices.append(["list_name", "name", "label"])
 
-        wb.save("api/test_data/test_xlsform_with_date.xlsx")
+        wb.save("django_xlsform_validator/test_data/test_xlsform_with_date.xlsx")
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -409,7 +409,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append(["2024-09-02 00:00:00", "John Doe"])
         ws.append(["2023-05-15 00:00:00", "Jane Smith"])
 
-        wb.save("api/test_data/excel_date_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/excel_date_spreadsheet.xlsx")
 
     def create_case_insensitive_test_spreadsheet(self):
         """
@@ -424,15 +424,15 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "Female", "Jane Smith", 65.0])  # Female instead of female
         ws.append([45, "oThEr", "Alex Johnson", 80.2])  # oThEr instead of other
 
-        wb.save("api/test_data/case_insensitive_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/case_insensitive_spreadsheet.xlsx")
 
     def test_case_insensitive_validation(self):
         """
         Test that validation works with case-insensitive matching for select_one values.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/case_insensitive_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/case_insensitive_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -451,9 +451,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test downloading highlighted Excel file for invalid spreadsheet.
         """
-        with open("api/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/invalid_type_mismatch.xlsx", "rb"
+                "django_xlsform_validator/test_data/invalid_type_mismatch.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -467,7 +467,7 @@ class SpreadsheetValidationTests(TestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(response.data["result"], "invalid")
                 self.assertIn("download_id", response.data)
-                download_url = reverse("validate-download")
+                download_url = reverse("django_xlsform_validator:validate-download")
                 download_response = self.client.get(
                     f"{download_url}?id={response.data['download_id']}"
                 )
@@ -487,10 +487,10 @@ class SpreadsheetValidationTests(TestCase):
         Test that validation works with integer choice values.
         """
         with open(
-            "api/test_data/test_xlsform_integer_choices.xlsx", "rb"
+            "django_xlsform_validator/test_data/test_xlsform_integer_choices.xlsx", "rb"
         ) as xlsform_file:
             with open(
-                "api/test_data/integer_choice_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/integer_choice_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -525,7 +525,7 @@ class SpreadsheetValidationTests(TestCase):
         choices.append(["gender", "f", "Female", "woman"])
         choices.append(["gender", "o", "Other", "other_option"])
 
-        wb.save("api/test_data/test_xlsform_with_aliases.xlsx")
+        wb.save("django_xlsform_validator/test_data/test_xlsform_with_aliases.xlsx")
 
     def create_alias_test_spreadsheet(self):
         """
@@ -539,15 +539,15 @@ class SpreadsheetValidationTests(TestCase):
         ws.append([30, "woman", "Jane Smith"])  # using alias "woman" instead of "f"
         ws.append([45, "other_option", "Alex Johnson"])  # using alias "other_option"
 
-        wb.save("api/test_data/alias_test_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/alias_test_spreadsheet.xlsx")
 
     def test_alias_validation(self):
         """
         Test that validation works with alias values.
         """
-        with open("api/test_data/test_xlsform_with_aliases.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform_with_aliases.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/alias_test_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/alias_test_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -566,9 +566,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test that validation works with Excel date format (YYYY-MM-DD HH:MM:SS).
         """
-        with open("api/test_data/test_xlsform_with_date.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform_with_date.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/excel_date_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/excel_date_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -609,7 +609,7 @@ class SpreadsheetValidationTests(TestCase):
         choices = wb.create_sheet("choices")
         choices.append(["list_name", "name", "label"])
 
-        wb.save("api/test_data/test_xlsform_with_regex.xlsx")
+        wb.save("django_xlsform_validator/test_data/test_xlsform_with_regex.xlsx")
 
     def create_valid_regex_test_spreadsheet(self):
         """
@@ -623,7 +623,7 @@ class SpreadsheetValidationTests(TestCase):
         ws.append(["Feb-15", "B2", "Jane Smith"])
         ws.append(["Dec-31", "Z9", "Alex Johnson"])
 
-        wb.save("api/test_data/valid_regex_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/valid_regex_spreadsheet.xlsx")
 
     def create_invalid_regex_test_spreadsheet(self):
         """
@@ -637,15 +637,15 @@ class SpreadsheetValidationTests(TestCase):
         ws.append(["Feb-1", "ABC", "Jane Smith"])  # Invalid day format and code length
         ws.append(["13-31", "1A", "Alex Johnson"])  # Invalid month number
 
-        wb.save("api/test_data/invalid_regex_spreadsheet.xlsx")
+        wb.save("django_xlsform_validator/test_data/invalid_regex_spreadsheet.xlsx")
 
     def test_valid_regex_constraint_validation(self):
         """
         Test that validation passes with valid regex constraint values.
         """
-        with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/valid_regex_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/valid_regex_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
@@ -664,9 +664,9 @@ class SpreadsheetValidationTests(TestCase):
         """
         Test that validation fails with invalid regex constraint values.
         """
-        with open("api/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
+        with open("django_xlsform_validator/test_data/test_xlsform_with_regex.xlsx", "rb") as xlsform_file:
             with open(
-                "api/test_data/invalid_regex_spreadsheet.xlsx", "rb"
+                "django_xlsform_validator/test_data/invalid_regex_spreadsheet.xlsx", "rb"
             ) as spreadsheet_file:
                 response = self.client.post(
                     self.url,
