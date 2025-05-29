@@ -6,6 +6,8 @@ import os
 import openpyxl
 from typing import Dict, List, Any, Tuple, Optional
 import re
+from elementpath import XPath1Parser, XPathContext
+from xml.etree.ElementTree import Element
 
 ERROR_TYPE_MISMATCH = "type_mismatch"
 ERROR_CONSTRAINT_UNSATISFIED = "error_constraint_unsatisfied"
@@ -354,14 +356,12 @@ class XLSFormValidator:
         """
         
         regex_pattern = r'^regex\(\s*\.\s*,\s*[\'"](.*?)[\'"]\s*\)$'
-
         regex_match = re.match(regex_pattern, constraint.strip())
 
         if regex_match:
             pattern_str = regex_match.group(1)
             try:
                 str_value = str(value)
-
                 match_result = re.match(pattern_str, str_value)
                 print(str_value, match_result)
                 if not match_result:
@@ -370,43 +370,49 @@ class XLSFormValidator:
             except re.error as e:
                 return f"Invalid regex pattern in constraint '{constraint}': {str(e)}"
         
+        processed_value = value
         if self.question_types.get(question_name) == 'integer':
             try:
-                value = int(value)
+                processed_value = int(value)
             except ValueError:
                 return f"Cannot validate constraint for non-integer value '{value}'"
         elif self.question_types.get(question_name) == 'decimal':
             try:
-                value = float(value)
+                processed_value = float(value)
             except ValueError:
                 return f"Cannot validate constraint for non-decimal value '{value}'"
         
-        if isinstance(value, (int, float)):
-            constraint_expr = constraint.replace('.', str(value))
-            
-            less_than_pattern = r'^(\d+) < (\d+)$'
-            greater_than_pattern = r'^(\d+) > (\d+)$'
-            less_equal_pattern = r'^(\d+) <= (\d+)$'
-            greater_equal_pattern = r'^(\d+) >= (\d+)$'
-            
-            match = re.match(less_than_pattern, constraint_expr)
-            if match and not (int(match.group(1)) < int(match.group(2))):
-                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-            
-            match = re.match(greater_than_pattern, constraint_expr)
-            if match and not (int(match.group(1)) > int(match.group(2))):
-                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-            
-            match = re.match(less_equal_pattern, constraint_expr)
-            if match and not (int(match.group(1)) <= int(match.group(2))):
-                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-            
-            match = re.match(greater_equal_pattern, constraint_expr)
-            if match and not (int(match.group(1)) >= int(match.group(2))):
-                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-        
-        return None
+        if self._evaluate_xpath_constraint(constraint, processed_value):
+            return None
+        else:
+            return f"Constraint '{constraint}' is not satisfied for value '{value}'"
     
+    def _evaluate_xpath_constraint(self, expression: str, value) -> bool:
+        """
+        Evaluate an XPath constraint expression.
+        
+        Args:
+            expression: The XPath constraint expression (e.g., ". >= 0 and . < 120")
+            value: The value to evaluate against
+            
+        Returns:
+            bool: True if constraint is satisfied, False otherwise
+        """
+        try:
+            fake_node = Element("value")
+            fake_node.text = str(value)
+
+            # Create an XPath parser and context
+            parser = XPath1Parser()
+            tree = parser.parse(expression)
+            context = XPathContext(fake_node)
+
+            # Evaluate the constraint expression
+            result = tree.evaluate(context)
+            return bool(result)
+        except Exception:
+            return False
+            
     def _extract_list_name(self, question_type: str) -> Optional[str]:
         """
         Extract the list name from a select_one or select_multiple question type.
