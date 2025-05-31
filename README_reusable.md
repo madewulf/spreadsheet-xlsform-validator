@@ -148,6 +148,3 @@ This validator uses the following libraries:
 
 You can test this validator online at: https://data-validator.bluesquare.org/
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
