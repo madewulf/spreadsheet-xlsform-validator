@@ -127,6 +127,40 @@ This validator uses the following libraries:
 
 You can test this validator online at: https://data-validator.bluesquare.org/
 
+## Using as a Reusable Django App
+
+This project can be used as a reusable Django app in your own Django projects. To install:
+
+```bash
+pip install django-xlsform-validator
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/madewulf/spreadsheet-xlsform-validator.git
+cd spreadsheet-xlsform-validator
+pip install -e .
+```
+
+Then add to your Django project:
+
+```python
+# settings.py
+INSTALLED_APPS = [
+    # ...
+    'django_xlsform_validator',
+]
+
+# urls.py
+urlpatterns = [
+    # ...
+    path('validator/', include('django_xlsform_validator.urls', namespace='django_xlsform_validator')),
+]
+```
+
+For more details on configuration options and usage, see the [Reusable App Documentation](README_reusable.md).
+
 ## AWS Elastic Beanstalk Deployment
 
 ### Prerequisites

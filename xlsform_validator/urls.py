@@ -23,12 +23,12 @@ from django.shortcuts import render
 
 def validation_form_view(request):
     """Render the validation form at the root URL."""
-    return render(request, "api/validate.html")
+    return render(request, "django_xlsform_validator/validate.html")
 
 urlpatterns = [
     path("", validation_form_view, name="root"),
     path("admin/", admin.site.urls),
-    path("api/", include("api.urls")),
+    path("validator/", include("django_xlsform_validator.urls", namespace="django_xlsform_validator")),
 ]
 
 if settings.DEBUG:

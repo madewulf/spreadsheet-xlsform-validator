@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Open Graph tags for social media sharing -->
+    <meta property="og:title" content="XLSForm Spreadsheet Validator">
+    <meta property="og:description" content="Validate spreadsheet data against XLSForm specifications. Check column headers, data types, constraints, and required fields.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://data-validator.bluesquare.org/">
+    
+    <title>XLSForm Validator</title>
+    {% load static %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{% static 'django_xlsform_validator/css/styles.css' %}">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0">XLSForm Spreadsheet Validator</h3>
+                        <small class="text-light">
+                            <a href="https://github.com/madewulf/spreadsheet-xlsform-validator" target="_blank" class="text-light text-decoration-none">
+                                <i class="bi bi-github"></i> View on GitHub
+                            </a>
+                        </small>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning" role="alert">
+                            <strong><i class="bi bi-exclamation-triangle"></i> Privacy Notice:</strong> 
+                            Please do not upload files containing private, sensitive, or confidential data. 
+                            This is a public service and uploaded files are processed on our servers.
+                        </div>
+                        <form id="validation-form" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="xlsform_file" class="form-label">XLSForm File (Excel format)</label>
+                                <input type="file" class="form-control" id="xlsform_file" name="xlsform_file" accept=".xlsx,.xls" required>
+                                <div class="form-text">Upload the XLSForm file containing the form definition.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="spreadsheet_file" class="form-label">Spreadsheet File to Validate</label>
+                                <input type="file" class="form-control" id="spreadsheet_file" name="spreadsheet_file" accept=".xlsx,.xls,.csv" required>
+                                <div class="form-text">Upload the spreadsheet file you want to validate against the XLSForm.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Validate</button>
+                        </form>
+                        
+                        <div class="mt-4">
+                            <h5>Example Files</h5>
+                            <p>Download these example files to test the validator:</p>
+                            <ul>
+                                <li><a href="{% url 'django_xlsform_validator:validate-download-example' %}?file=xlsform" class="btn btn-sm btn-outline-secondary">Download Example XLSForm</a></li>
+                                <li><a href="{% url 'django_xlsform_validator:validate-download-example' %}?file=spreadsheet" class="btn btn-sm btn-outline-secondary">Download Example Spreadsheet</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="results-container" class="mt-4 d-none">
+                    <div class="card">
+                        <div class="card-header" id="results-header">
+                            <h4 class="mb-0">Validation Results</h4>
+                        </div>
+                        <div class="card-body">
+                            <div id="valid-result" class="d-none">
+                                <div class="alert alert-success">
+                                    <h5>Spreadsheet is valid!</h5>
+                                    <p>All data in the spreadsheet matches the XLSForm specification.</p>
+                                </div>
+                            </div>
+                            <div id="invalid-result" class="d-none">
+                                <div class="alert alert-danger">
+                                    <h5>Spreadsheet is invalid!</h5>
+                                    <p>The following errors were found:</p>
+                                    <div id="download-link-container" class="d-none mt-3">
+                                        <a id="download-link" href="#" class="btn btn-warning">
+                                            <i class="bi bi-download"></i> Download Highlighted Excel File
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Line</th>
+                                                <th>Column</th>
+                                                <th>Question</th>
+                                                <th>Error Type</th>
+                                                <th>Explanation</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="errors-table-body">
+                                            <!-- Errors will be inserted here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'django_xlsform_validator/js/validate.js' %}"></script>
+</body>
+</html>
