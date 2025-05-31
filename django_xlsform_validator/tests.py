@@ -11,6 +11,8 @@ from rest_framework import status
 import pandas as pd
 import openpyxl
 from .validation import XLSFormValidator
+import xml.etree.ElementTree as ET
+import uuid
 
 
 class SpreadsheetValidationTests(TestCase):
@@ -722,3 +724,254 @@ class SpreadsheetValidationTests(TestCase):
         
         error = validator._validate_constraint("01234", "regex(.,'^([0-9]{5})$')", 'code_ets')
         self.assertIsNone(error, "Validation should pass for '01234' with 5-digit regex pattern")
+
+    def test_xml_generation_valid_spreadsheet(self):
+        """
+        Test XML generation with a valid spreadsheet.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                        "version": "2025050304",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertIn("xml_files", response.data)
+        self.assertIsInstance(response.data["xml_files"], list)
+        self.assertEqual(len(response.data["xml_files"]), 3)
+        
+        for xml_string in response.data["xml_files"]:
+            self.assertIn('xmlns:h="http://www.w3.org/1999/xhtml"', xml_string)
+            self.assertIn('xmlns:jr="http://openrosa.org/javarosa"', xml_string)
+            self.assertIn('version="2025050304"', xml_string)
+            self.assertIn('id="file_active_admission"', xml_string)
+            self.assertIn("<main_title>", xml_string)
+            self.assertIn("<meta>", xml_string)
+            self.assertIn("<instanceID>uuid:", xml_string)
+
+    def test_xml_generation_without_flag(self):
+        """
+        Test that XML is not generated when generate_xml flag is not set.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertNotIn("xml_files", response.data)
+
+    def test_xml_generation_with_invalid_spreadsheet(self):
+        """
+        Test that XML generation fails when spreadsheet validation fails.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/invalid_type_mismatch.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                        "version": "2025050304",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "invalid")
+        self.assertNotIn("xml_files", response.data)
+        self.assertIn("errors", response.data)
+
+    def test_xml_generation_default_version(self):
+        """
+        Test XML generation with default version parameter.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertIn("xml_files", response.data)
+        
+        for xml_string in response.data["xml_files"]:
+            self.assertIn('version="1.0"', xml_string)
+
+    def test_xml_generation_with_labels(self):
+        """
+        Test XML generation with spreadsheet using labels as column headers.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet_labels.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                        "version": "test123",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "valid")
+        self.assertIn("xml_files", response.data)
+        
+        for xml_string in response.data["xml_files"]:
+            self.assertIn('version="test123"', xml_string)
+            self.assertIn("<age>", xml_string)
+            self.assertIn("<gender>", xml_string)
+            self.assertIn("<name>", xml_string)
+            self.assertIn("<weight>", xml_string)
+
+    def test_xml_structure_validation(self):
+        """
+        Test that generated XML has proper structure and can be parsed.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                        "version": "2025050304",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        xml_files = response.data["xml_files"]
+        
+        for xml_string in xml_files:
+            try:
+                root = ET.fromstring(xml_string)
+                
+                self.assertEqual(root.tag, "data")
+                self.assertEqual(root.get("version"), "2025050304")
+                self.assertEqual(root.get("id"), "file_active_admission")
+                
+                main_title = root.find("main_title")
+                self.assertIsNotNone(main_title)
+                
+                meta = root.find("meta")
+                self.assertIsNotNone(meta)
+                
+                instance_id = meta.find("instanceID")
+                self.assertIsNotNone(instance_id)
+                self.assertTrue(instance_id.text.startswith("uuid:"))
+                
+                uuid_part = instance_id.text.replace("uuid:", "")
+                uuid.UUID(uuid_part)
+                
+            except ET.ParseError:
+                self.fail(f"Generated XML is not valid: {xml_string}")
+            except ValueError:
+                self.fail(f"Generated UUID is not valid: {instance_id.text}")
+
+    def test_xml_generation_unit_test(self):
+        """
+        Test XML generation at the validator level (unit test).
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as f:
+            spreadsheet_file = SimpleUploadedFile("valid_spreadsheet.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file, version="unit_test")
+            xml_files = list(xml_generator)
+            
+            self.assertEqual(len(xml_files), 3)
+            
+            for xml_string in xml_files:
+                self.assertIn('version="unit_test"', xml_string)
+                self.assertIn("<main_title>", xml_string)
+                self.assertIn("<meta>", xml_string)
+                
+                root = ET.fromstring(xml_string)
+                self.assertEqual(root.get("version"), "unit_test")
+
+    def test_xml_generation_iterator_pattern(self):
+        """
+        Test that XML generation returns an iterator that can be consumed multiple times.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as f:
+            spreadsheet_file = SimpleUploadedFile("valid_spreadsheet.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file, version="iterator_test")
+            
+            xml_count = 0
+            for xml_string in xml_generator:
+                xml_count += 1
+                self.assertIsInstance(xml_string, str)
+                self.assertIn('version="iterator_test"', xml_string)
+                
+            self.assertEqual(xml_count, 3)
+
+    def test_xml_generation_unique_uuids(self):
+        """
+        Test that each generated XML has a unique UUID.
+        """
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
+            with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                        "generate_xml": "true",
+                        "version": "uuid_test",
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        xml_files = response.data["xml_files"]
+        
+        uuids = []
+        for xml_string in xml_files:
+            root = ET.fromstring(xml_string)
+            meta = root.find("meta")
+            instance_id = meta.find("instanceID")
+            uuid_part = instance_id.text.replace("uuid:", "")
+            uuids.append(uuid_part)
+        
+        self.assertEqual(len(uuids), len(set(uuids)), "All UUIDs should be unique")

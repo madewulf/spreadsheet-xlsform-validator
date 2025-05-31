@@ -42,6 +42,8 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
 
         xlsform_file = serializer.validated_data["xlsform_file"]
         spreadsheet_file = serializer.validated_data["spreadsheet_file"]
+        generate_xml = serializer.validated_data.get("generate_xml", False)
+        version = serializer.validated_data.get("version", "1.0")
 
         validator = XLSFormValidator()
 
@@ -66,6 +68,28 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
 
         if result["is_valid"]:
             response_data = {"result": "valid"}
+            
+            if generate_xml:
+                try:
+                    xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file, version, skip_validation=True)
+                    xml_files = list(xml_generator)
+                    response_data["xml_files"] = xml_files
+                except Exception as e:
+                    return Response(
+                        {
+                            "result": "invalid",
+                            "errors": [
+                                {
+                                    "line": 0,
+                                    "column": 0,
+                                    "error_type": "xml_generation_error",
+                                    "error_explanation": f"Failed to generate XML: {str(e)}",
+                                    "question_name": "",
+                                }
+                            ],
+                        },
+                        status=status.HTTP_200_OK,
+                    )
         else:
             validation_id = str(uuid.uuid4())
             highlighted_file_path = validator.create_highlighted_excel(
