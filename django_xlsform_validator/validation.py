@@ -80,7 +80,15 @@ class XLSFormValidator:
         Returns:
             str: The path to the temporary file
         """
-        file_path = os.path.join(app_settings.TEMP_DIR, file_obj.name)
+        os.makedirs(app_settings.TEMP_DIR, exist_ok=True)
+        
+        if hasattr(file_obj, 'name') and file_obj.name:
+            filename = os.path.basename(file_obj.name)
+            file_path = os.path.join(app_settings.TEMP_DIR, filename)
+        else:
+            fd, file_path = tempfile.mkstemp(suffix='.xlsx', dir=app_settings.TEMP_DIR)
+            os.close(fd)
+        
         with open(file_path, "wb+") as destination:
             if hasattr(file_obj, 'chunks'):
                 for chunk in file_obj.chunks():

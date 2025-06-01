@@ -975,3 +975,25 @@ class SpreadsheetValidationTests(TestCase):
             uuids.append(uuid_part)
         
         self.assertEqual(len(uuids), len(set(uuids)), "All UUIDs should be unique")
+
+    def test_bytesio_file_handling(self):
+        """
+        Test that validator handles BytesIO file objects without name attributes.
+        """
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        with open("django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb") as f:
+            file_content = f.read()
+        
+        bytesio_file = io.BytesIO(file_content)
+        self.assertFalse(hasattr(bytesio_file, 'name'))
+        
+        result = validator.validate_spreadsheet(bytesio_file)
+        self.assertTrue(result['is_valid'])
