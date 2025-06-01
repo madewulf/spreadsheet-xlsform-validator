@@ -67,8 +67,20 @@ cd spreadsheet-xlsform-validator
 ```
 
 2. Install dependencies:
+
+For standalone web application:
 ```bash
 pip install -r requirements.txt
+```
+
+For core functionality only (when using as reusable Django app):
+```bash
+pip install -r requirements-core.txt
+```
+
+For deployment to production:
+```bash
+pip install -r requirements-core.txt -r requirements-deploy.txt
 ```
 
 3. Run migrations:
