@@ -7,10 +7,12 @@ import os
 import openpyxl
 from typing import Dict, List, Any, Tuple, Optional
 import re
+import uuid
 from elementpath import XPath1Parser, XPathContext
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, SubElement, tostring
 import json
 from pyxform import create_survey_from_xls, errors
+import tempfile
 
 from . import app_settings
 
@@ -80,8 +82,12 @@ class XLSFormValidator:
         """
         file_path = os.path.join(app_settings.TEMP_DIR, file_obj.name)
         with open(file_path, "wb+") as destination:
-            for chunk in file_obj.chunks():
-                destination.write(chunk)
+            if hasattr(file_obj, 'chunks'):
+                for chunk in file_obj.chunks():
+                    destination.write(chunk)
+            else:
+                file_obj.seek(0)
+                destination.write(file_obj.read())
         return file_path
 
     def _extract_questions_from_pyxform(self, parsed_survey: dict):
@@ -624,3 +630,78 @@ class XLSFormValidator:
         os.remove(original_path)
 
         return highlighted_path
+
+    def generate_xml_from_spreadsheet(self, spreadsheet_file, version="1.0", skip_validation=False):
+        """
+        Generate XML files from validated spreadsheet data.
+        
+        Args:
+            spreadsheet_file: The spreadsheet file object
+            version: Version string for the XML files
+            skip_validation: Skip validation if already validated
+            
+        Returns:
+            Iterator yielding XML strings for each row
+        """
+        if not skip_validation:
+            validation_result = self.validate_spreadsheet(spreadsheet_file)
+            if not validation_result["is_valid"]:
+                raise ValueError(f"Spreadsheet validation failed: {validation_result['errors']}")
+        
+        file_path = self._save_temp_file(spreadsheet_file)
+        try:
+            df = pd.read_excel(file_path)
+            
+            for _, row in df.iterrows():
+                xml_string = self._generate_xml_for_row(row, version)
+                yield xml_string
+                
+        finally:
+            os.remove(file_path)
+    
+    def _generate_xml_for_row(self, row, version):
+        """
+        Generate XML for a single spreadsheet row.
+        
+        Args:
+            row: Pandas Series representing a spreadsheet row
+            version: Version string for the XML
+            
+        Returns:
+            str: XML string for the row
+        """
+        root = Element("data")
+        root.set("xmlns:h", "http://www.w3.org/1999/xhtml")
+        root.set("xmlns:xsd", "http://www.w3.org/2001/XMLSchema")
+        root.set("xmlns:jr", "http://openrosa.org/javarosa")
+        root.set("xmlns:ev", "http://www.w3.org/2001/xml-events")
+        root.set("xmlns:orx", "http://openrosa.org/xforms")
+        root.set("xmlns:odk", "http://www.opendatakit.org/xforms")
+        root.set("id", "file_active_admission")
+        root.set("version", version)
+        
+        main_title = SubElement(root, "main_title")
+        
+        for column_name, value in row.items():
+            if pd.isna(value):
+                continue
+                
+            question_name = self._resolve_column_to_question_name(column_name)
+            if question_name is None:
+                question_name = column_name.lower().replace(' ', '_').replace('/', '_').replace('°', 'n')
+            
+            question_name = ''.join(c for c in question_name if c.isalnum() or c == '_')
+            
+            if isinstance(value, (int, float)):
+                str_value = str(int(value)) if value == int(value) else str(value)
+            else:
+                str_value = str(value)
+            
+            element = SubElement(main_title, question_name)
+            element.text = str_value
+        
+        meta = SubElement(root, "meta")
+        instance_id = SubElement(meta, "instanceID")
+        instance_id.text = f"uuid:{uuid.uuid4()}"
+        
+        return tostring(root, encoding='unicode')
