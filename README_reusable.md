@@ -13,17 +13,22 @@ A Django app for validating spreadsheet data against XLSForm specifications.
 
 ## Installation
 
+Install the core package without deployment dependencies:
+
 ```bash
 pip install django-xlsform-validator
 ```
 
-Or install from source:
+Or install from source with core dependencies only:
 
 ```bash
 git clone https://github.com/madewulf/spreadsheet-xlsform-validator.git
 cd spreadsheet-xlsform-validator
+pip install -r requirements-core.txt
 pip install -e .
 ```
+
+Note: This installation method excludes deployment-specific dependencies like WhiteNoise, Gunicorn, and PostgreSQL drivers, making it suitable for integration into existing Django projects.
 
 ## Quick Start
 
