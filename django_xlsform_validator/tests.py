@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
+from django.core.files.uploadedfile import SimpleUploadedFile
 import pandas as pd
 import openpyxl
 from .validation import XLSFormValidator
@@ -975,3 +976,126 @@ class SpreadsheetValidationTests(TestCase):
             uuids.append(uuid_part)
         
         self.assertEqual(len(uuids), len(set(uuids)), "All UUIDs should be unique")
+
+    def test_generate_xml_from_dict_basic(self):
+        """
+        Test basic XML generation from dictionary.
+        """
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        data_dict = {
+            "age": 25,
+            "gender": "male",
+            "name": "John Doe",
+            "weight": 70.5
+        }
+        
+        xml_string = validator.generate_xml_from_dict(data_dict, version="dict_test")
+        
+        self.assertIn('version="dict_test"', xml_string)
+        self.assertIn("<main_title>", xml_string)
+        self.assertIn("<meta>", xml_string)
+        self.assertIn("<age>25</age>", xml_string)
+        self.assertIn("<gender>male</gender>", xml_string)
+        self.assertIn("<name>John Doe</name>", xml_string)
+        self.assertIn("<weight>70.5</weight>", xml_string)
+        
+        root = ET.fromstring(xml_string)
+        self.assertEqual(root.get("version"), "dict_test")
+        
+        meta = root.find("meta")
+        instance_id = meta.find("instanceID")
+        self.assertTrue(instance_id.text.startswith("uuid:"))
+
+    def test_generate_xml_from_dict_with_labels(self):
+        """
+        Test XML generation from dictionary using question labels.
+        """
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        data_dict = {
+            "Age": 30,
+            "Gender": "female", 
+            "Name": "Jane Smith"
+        }
+        
+        xml_string = validator.generate_xml_from_dict(data_dict)
+        
+        self.assertIn("<age>30</age>", xml_string)
+        self.assertIn("<gender>female</gender>", xml_string)
+        self.assertIn("<name>Jane Smith</name>", xml_string)
+
+    def test_generate_xml_from_dict_empty_dict(self):
+        """
+        Test XML generation from empty dictionary.
+        """
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        xml_string = validator.generate_xml_from_dict({})
+        
+        self.assertIn("<main_title", xml_string)
+        self.assertIn("<meta>", xml_string)
+        
+        root = ET.fromstring(xml_string)
+        main_title = root.find("main_title")
+        self.assertEqual(len(list(main_title)), 0)
+
+    def test_generate_xml_from_dict_invalid_input(self):
+        """
+        Test error handling for invalid input types.
+        """
+        validator = XLSFormValidator()
+        
+        with self.assertRaises(ValueError) as context:
+            validator.generate_xml_from_dict("not a dict")
+        
+        self.assertIn("data_dict must be a dictionary", str(context.exception))
+        
+        with self.assertRaises(ValueError) as context:
+            validator.generate_xml_from_dict(None)
+        
+        self.assertIn("data_dict must be a dictionary", str(context.exception))
+
+    def test_generate_xml_from_dict_matches_spreadsheet_output(self):
+        """
+        Test that dict-based XML generation produces similar output to spreadsheet-based generation.
+        """
+        validator = XLSFormValidator()
+        
+        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+            xlsform_file = SimpleUploadedFile("test_xlsform.xlsx", f.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertTrue(validator.parse_xlsform(xlsform_file))
+        
+        data_dict = {
+            "age": 25,
+            "gender": "male",
+            "name": "Test User"
+        }
+        dict_xml = validator.generate_xml_from_dict(data_dict, version="comparison_test")
+        
+        root = ET.fromstring(dict_xml)
+        self.assertEqual(root.tag, "data")
+        self.assertEqual(root.get("version"), "comparison_test")
+        
+        main_title = root.find("main_title")
+        self.assertIsNotNone(main_title)
+        
+        age_elem = main_title.find("age")
+        self.assertIsNotNone(age_elem)
+        self.assertEqual(age_elem.text, "25")
+        
+        gender_elem = main_title.find("gender")
+        self.assertIsNotNone(gender_elem)
+        self.assertEqual(gender_elem.text, "male")
