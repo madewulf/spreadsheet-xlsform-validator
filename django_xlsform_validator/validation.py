@@ -705,3 +705,22 @@ class XLSFormValidator:
         instance_id.text = f"uuid:{uuid.uuid4()}"
         
         return tostring(root, encoding='unicode')
+    
+    def generate_xml_from_dict(self, data_dict, version="1.0"):
+        """
+        Generate XML from a dictionary of key-value pairs.
+        
+        Args:
+            data_dict: Dictionary containing question names/labels as keys and values as answers
+            version: Version string for the XML file
+            
+        Returns:
+            str: XML string for the data
+        """
+        if not isinstance(data_dict, dict):
+            raise ValueError("data_dict must be a dictionary")
+        
+        row_series = pd.Series(data_dict)
+        
+        xml_string = self._generate_xml_for_row(row_series, version)
+        return xml_string
