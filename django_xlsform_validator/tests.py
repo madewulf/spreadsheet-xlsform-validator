@@ -753,8 +753,6 @@ class SpreadsheetValidationTests(TestCase):
             self.assertIn('xmlns:h="http://www.w3.org/1999/xhtml"', xml_string)
             self.assertIn('xmlns:jr="http://openrosa.org/javarosa"', xml_string)
             self.assertIn('version="2025050304"', xml_string)
-            self.assertIn('id="file_active_admission"', xml_string)
-            self.assertIn("<main_title>", xml_string)
             self.assertIn("<meta>", xml_string)
             self.assertIn("<instanceID>uuid:", xml_string)
 
@@ -876,12 +874,8 @@ class SpreadsheetValidationTests(TestCase):
                 
                 self.assertEqual(root.tag, "data")
                 self.assertEqual(root.get("version"), "2025050304")
-                self.assertEqual(root.get("id"), "file_active_admission")
                 
-                main_title = root.find("main_title")
-                self.assertIsNotNone(main_title)
-                
-                meta = root.find("meta")
+                meta = root.find(".//meta")
                 self.assertIsNotNone(meta)
                 
                 instance_id = meta.find("instanceID")
@@ -917,7 +911,6 @@ class SpreadsheetValidationTests(TestCase):
             
             for xml_string in xml_files:
                 self.assertIn('version="unit_test"', xml_string)
-                self.assertIn("<main_title>", xml_string)
                 self.assertIn("<meta>", xml_string)
                 
                 root = ET.fromstring(xml_string)
@@ -997,7 +990,6 @@ class SpreadsheetValidationTests(TestCase):
         xml_string = validator.generate_xml_from_dict(data_dict, version="dict_test")
         
         self.assertIn('version="dict_test"', xml_string)
-        self.assertIn("<main_title>", xml_string)
         self.assertIn("<meta>", xml_string)
         self.assertIn("<age>25</age>", xml_string)
         self.assertIn("<gender>male</gender>", xml_string)
@@ -1045,12 +1037,12 @@ class SpreadsheetValidationTests(TestCase):
         
         xml_string = validator.generate_xml_from_dict({})
         
-        self.assertIn("<main_title", xml_string)
         self.assertIn("<meta>", xml_string)
         
         root = ET.fromstring(xml_string)
-        main_title = root.find("main_title")
-        self.assertEqual(len(list(main_title)), 0)
+        age_elem = root.find(".//age")
+        self.assertIsNotNone(age_elem)
+        self.assertIsNone(age_elem.text)
 
     def test_generate_xml_from_dict_invalid_input(self):
         """
@@ -1086,16 +1078,13 @@ class SpreadsheetValidationTests(TestCase):
         dict_xml = validator.generate_xml_from_dict(data_dict, version="comparison_test")
         
         root = ET.fromstring(dict_xml)
-        self.assertEqual(root.tag, "data")
+        self.assertTrue(root.tag.endswith("data"))
         self.assertEqual(root.get("version"), "comparison_test")
         
-        main_title = root.find("main_title")
-        self.assertIsNotNone(main_title)
-        
-        age_elem = main_title.find("age")
+        age_elem = root.find(".//age")
         self.assertIsNotNone(age_elem)
         self.assertEqual(age_elem.text, "25")
         
-        gender_elem = main_title.find("gender")
+        gender_elem = root.find(".//gender")
         self.assertIsNotNone(gender_elem)
         self.assertEqual(gender_elem.text, "male")

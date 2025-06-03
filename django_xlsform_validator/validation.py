@@ -36,6 +36,8 @@ class XLSFormValidator:
         self.choice_lists = {}
         self.question_labels = {}  # Map labels to question names
         self.choice_aliases = {}  # Map list_name to dict of alias -> choice_value
+        self.survey_xml = None  # Store the XLSForm XML structure
+        self.data_instance_template = None  # Store the data instance template
 
     def parse_xlsform(self, xlsform_file) -> bool:
         """
@@ -52,6 +54,9 @@ class XLSFormValidator:
 
             survey = create_survey_from_xls(file_path)
             survey_json = survey.to_json()
+            
+            self.survey_xml = survey.to_xml()
+            self._extract_data_instance_template()
 
             # Parse the JSON to extract data structures for validation
             parsed_survey = json.loads(survey_json)
@@ -157,6 +162,22 @@ class XLSFormValidator:
                     if "alias" in choice:
                         alias_value = choice["alias"]
                         self.choice_aliases[list_name][alias_value] = choice_value
+
+    def _extract_data_instance_template(self):
+        """
+        Extract the data instance template from the XLSForm XML.
+        """
+        if not self.survey_xml:
+            return
+            
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(self.survey_xml)
+        
+        for elem in root.iter():
+            if elem.tag.endswith("data") or "data" in elem.tag:
+                # Store the data instance template
+                self.data_instance_template = elem
+                break
 
     def validate_spreadsheet(
         self, spreadsheet_file, xlsform_data=None
@@ -661,7 +682,7 @@ class XLSFormValidator:
     
     def _generate_xml_for_row(self, row, version):
         """
-        Generate XML for a single spreadsheet row.
+        Generate XML for a single spreadsheet row using the XLSForm data instance structure.
         
         Args:
             row: Pandas Series representing a spreadsheet row
@@ -670,17 +691,29 @@ class XLSFormValidator:
         Returns:
             str: XML string for the row
         """
-        root = Element("data")
+        if not self.data_instance_template:
+            raise ValueError("XLSForm must be parsed before generating XML")
+            
+        import xml.etree.ElementTree as ET
+        import copy
+        
+        # Create a deep copy of the data instance template
+        root = copy.deepcopy(self.data_instance_template)
+        
+        if "xmlns" in root.attrib:
+            del root.attrib["xmlns"]
+        
+        for elem in root.iter():
+            if elem.tag.startswith("{"):
+                elem.tag = elem.tag.split("}", 1)[1]
+        
+        root.set("version", version)
         root.set("xmlns:h", "http://www.w3.org/1999/xhtml")
         root.set("xmlns:xsd", "http://www.w3.org/2001/XMLSchema")
         root.set("xmlns:jr", "http://openrosa.org/javarosa")
         root.set("xmlns:ev", "http://www.w3.org/2001/xml-events")
         root.set("xmlns:orx", "http://openrosa.org/xforms")
         root.set("xmlns:odk", "http://www.opendatakit.org/xforms")
-        root.set("id", "file_active_admission")
-        root.set("version", version)
-        
-        main_title = SubElement(root, "main_title")
         
         for column_name, value in row.items():
             if pd.isna(value):
@@ -692,19 +725,26 @@ class XLSFormValidator:
             
             question_name = ''.join(c for c in question_name if c.isalnum() or c == '_')
             
-            if isinstance(value, (int, float)):
-                str_value = str(int(value)) if value == int(value) else str(value)
-            else:
-                str_value = str(value)
+            element = root.find(question_name)
+            if element is None:
+                element = root.find(f".//{question_name}")
             
-            element = SubElement(main_title, question_name)
-            element.text = str_value
+            if element is not None:
+                if isinstance(value, (int, float)):
+                    str_value = str(int(value)) if value == int(value) else str(value)
+                else:
+                    str_value = str(value)
+                element.text = str_value
         
-        meta = SubElement(root, "meta")
-        instance_id = SubElement(meta, "instanceID")
-        instance_id.text = f"uuid:{uuid.uuid4()}"
+        meta = root.find("meta")
+        if meta is None:
+            meta = root.find(".//meta")
+        if meta is not None:
+            instance_id = meta.find("instanceID")
+            if instance_id is not None:
+                instance_id.text = f"uuid:{uuid.uuid4()}"
         
-        return tostring(root, encoding='unicode')
+        return ET.tostring(root, encoding='unicode')
     
     def generate_xml_from_dict(self, data_dict, version="1.0"):
         """
