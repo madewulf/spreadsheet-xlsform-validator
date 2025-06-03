@@ -12,9 +12,22 @@ from elementpath import XPath1Parser, XPathContext
 from xml.etree.ElementTree import Element, SubElement, tostring
 import json
 from pyxform import create_survey_from_xls, errors
-import tempfile
+import io
 
 from . import app_settings
+
+
+class NamedBytesIO(io.BytesIO):
+    """
+    BytesIO wrapper that provides a .name attribute for compatibility with libraries
+    that expect file-like objects with names (like pyxform).
+    """
+    def __init__(self, initial_bytes=None, name="temp_file"):
+        if initial_bytes is not None:
+            super().__init__(initial_bytes)
+        else:
+            super().__init__()
+        self.name = name
 
 
 ERROR_TYPE_MISMATCH = "type_mismatch"
@@ -50,22 +63,19 @@ class XLSFormValidator:
             bool: True if parsing was successful, False otherwise
         """
         try:
-            file_path = self._save_temp_file(xlsform_file)
+            memory_file = self._save_temp_file(xlsform_file)
 
-            survey = create_survey_from_xls(file_path)
+            survey = create_survey_from_xls(memory_file)
             survey_json = survey.to_json()
             
             self.survey_xml = survey.to_xml(validate=False)
             self._extract_data_instance_template()
 
-            # Parse the JSON to extract data structures for validation
             parsed_survey = json.loads(survey_json)
 
             self._extract_questions_from_pyxform(parsed_survey)
 
             self._extract_choices_from_pyxform(parsed_survey)
-
-            os.remove(file_path)
 
             return True
         except errors.PyXFormError as e:
@@ -75,25 +85,27 @@ class XLSFormValidator:
             print(f"Error parsing XLSForm: {str(e)}")
             return False
 
-    def _save_temp_file(self, file_obj) -> str:
+    def _save_temp_file(self, file_obj) -> NamedBytesIO:
         """
-        Save a file object to a temporary file.
+        Save uploaded file content to an in-memory BytesIO object.
 
         Args:
-            file_obj: The file object
+            file_obj: Django UploadedFile object
 
         Returns:
-            str: The path to the temporary file
+            NamedBytesIO: In-memory file object with the file content
         """
-        file_path = os.path.join(app_settings.TEMP_DIR, file_obj.name)
-        with open(file_path, "wb+") as destination:
-            if hasattr(file_obj, 'chunks'):
-                for chunk in file_obj.chunks():
-                    destination.write(chunk)
-            else:
-                file_obj.seek(0)
-                destination.write(file_obj.read())
-        return file_path
+        file_obj.seek(0)
+        if hasattr(file_obj, 'chunks'):
+            file_content = b''.join(chunk for chunk in file_obj.chunks())
+        else:
+            file_content = file_obj.read()
+        file_obj.seek(0)
+
+        memory_file = NamedBytesIO(file_content, name=file_obj.name)
+        memory_file.seek(0)
+
+        return memory_file
 
     def _extract_questions_from_pyxform(self, parsed_survey: dict):
         """
@@ -252,13 +264,12 @@ class XLSFormValidator:
                             self.choice_aliases[list_name][alias_value] = choice_value
 
         try:
-            file_path = self._save_temp_file(spreadsheet_file)
+            memory_file = self._save_temp_file(spreadsheet_file)
+            memory_file.seek(0)
 
-            df = pd.read_excel(file_path)
+            df = pd.read_excel(memory_file)
 
             errors = self._validate_spreadsheet_data(df)
-
-            os.remove(file_path)
 
             if errors:
                 return {"is_valid": False, "errors": errors}
@@ -603,7 +614,7 @@ class XLSFormValidator:
 
     def create_highlighted_excel(
         self, spreadsheet_file, errors: List[Dict[str, Any]]
-    ) -> str:
+    ) -> io.BytesIO:
         """
         Create an Excel file with highlighted error cells and an error tab.
 
@@ -612,14 +623,14 @@ class XLSFormValidator:
             errors: List of validation errors
 
         Returns:
-            str: Path to the highlighted Excel file
+            io.BytesIO: In-memory Excel file with highlighted errors
         """
-        import tempfile
         from openpyxl.styles import PatternFill
 
-        original_path = self._save_temp_file(spreadsheet_file)
+        memory_file = self._save_temp_file(spreadsheet_file)
+        memory_file.seek(0)
 
-        wb = openpyxl.load_workbook(original_path)
+        wb = openpyxl.load_workbook(memory_file)
         ws = wb.active
 
         red_fill = PatternFill(
@@ -627,7 +638,7 @@ class XLSFormValidator:
         )
 
         for error in errors:
-            if error["line"] > 1:  # Skip header row
+            if error["line"] > 1:
                 cell = ws.cell(row=error["line"], column=error["column"])
                 if cell is not None:
                     cell.fill = red_fill
@@ -646,12 +657,11 @@ class XLSFormValidator:
                 ]
             )
 
-        highlighted_path = tempfile.mktemp(suffix=".xlsx")
-        wb.save(highlighted_path)
+        output_buffer = io.BytesIO()
+        wb.save(output_buffer)
+        output_buffer.seek(0)
 
-        os.remove(original_path)
-
-        return highlighted_path
+        return output_buffer
 
     def generate_xml_from_spreadsheet(self, spreadsheet_file, version="1.0", skip_validation=False):
         """
@@ -670,16 +680,14 @@ class XLSFormValidator:
             if not validation_result["is_valid"]:
                 raise ValueError(f"Spreadsheet validation failed: {validation_result['errors']}")
         
-        file_path = self._save_temp_file(spreadsheet_file)
-        try:
-            df = pd.read_excel(file_path)
-            
-            for _, row in df.iterrows():
-                xml_string = self._generate_xml_for_row(row, version)
-                yield xml_string
-                
-        finally:
-            os.remove(file_path)
+        memory_file = self._save_temp_file(spreadsheet_file)
+        memory_file.seek(0)
+        
+        df = pd.read_excel(memory_file)
+        
+        for _, row in df.iterrows():
+            xml_string = self._generate_xml_for_row(row, version)
+            yield xml_string
     
     def _generate_xml_for_row(self, row, version):
         """

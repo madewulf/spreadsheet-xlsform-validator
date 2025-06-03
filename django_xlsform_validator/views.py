@@ -10,6 +10,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 import os
 import uuid
+import base64
+import io
 
 from . import app_settings
 from .serializers import SpreadsheetValidationSerializer, ValidationResultSerializer
@@ -92,12 +94,15 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
                     )
         else:
             validation_id = str(uuid.uuid4())
-            highlighted_file_path = validator.create_highlighted_excel(
+            highlighted_file_buffer = validator.create_highlighted_excel(
                 spreadsheet_file, result["errors"]
             )
 
+            highlighted_file_buffer.seek(0)
+            file_data_b64 = base64.b64encode(highlighted_file_buffer.read()).decode('utf-8')
+
             request.session[f"validation_{validation_id}"] = {
-                "file_path": highlighted_file_path,
+                "file_data": file_data_b64,
                 "errors": result["errors"],
             }
 
@@ -131,11 +136,14 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
         session_key = f"validation_{validation_id}"
         validation_data = request.session.get(session_key)
 
-        if not validation_data or not os.path.exists(validation_data["file_path"]):
+        if not validation_data or "file_data" not in validation_data:
             raise Http404("File not found or expired")
 
+        file_data = base64.b64decode(validation_data["file_data"])
+        file_buffer = io.BytesIO(file_data)
+
         response = FileResponse(
-            open(validation_data["file_path"], "rb"),
+            file_buffer,
             as_attachment=True,
             filename="highlighted_spreadsheet.xlsx",
         )
