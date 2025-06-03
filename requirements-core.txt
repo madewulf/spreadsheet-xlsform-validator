@@ -1,5 +1,5 @@
-django==4.2
-djangorestframework==3.14.0
+django
+djangorestframework
 pyxform==2.0.3
 elementpath>=5.0.1
 pandas
