@@ -313,7 +313,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
 
-    def test_highlighted_excel_download(self):
+    def test_highlighted_excel_download_invalid(self):
         """
         Test downloading highlighted Excel file for invalid spreadsheet.
         """
