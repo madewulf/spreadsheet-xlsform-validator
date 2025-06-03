@@ -1,7 +1,5 @@
-django>=4.2.16
-djangorestframework>=3.14.0
-pandas>=2.0.3
-openpyxl>=3.0.9
-xlrd>=2.0.1
-pyxform>=2.0.0
+django==4.2
+djangorestframework==3.14.0
+pyxform==2.0.3
 elementpath>=5.0.1
+
