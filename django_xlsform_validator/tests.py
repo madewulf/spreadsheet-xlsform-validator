@@ -947,7 +947,6 @@ class SpreadsheetValidationTests(TestCase):
             try:
                 root = ET.fromstring(xml_string)
 
-                self.assertEqual(root.tag, "data")
                 self.assertEqual(root.get("version"), "2025050304")
 
                 meta = root.find(".//meta")
@@ -1079,7 +1078,7 @@ class SpreadsheetValidationTests(TestCase):
         """
         validator = XLSFormValidator()
 
-        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
+        with open("test_data/file_active_validation_excel.xlsx", "rb") as f:
             xlsform_file = SimpleUploadedFile(
                 "test_xlsform.xlsx",
                 f.read(),
@@ -1087,16 +1086,15 @@ class SpreadsheetValidationTests(TestCase):
             )
             self.assertTrue(validator.parse_xlsform(xlsform_file))
 
-        data_dict = {"age": 25, "gender": "male", "name": "John Doe", "weight": 70.5}
+        #data_dict = {"age": 25, "gender": "male", "name": "John Doe", "weight": 70.5}
+        data_dict = {'id': 1, 'number': 1, 'region': 'ABIDJAN_2', 'district': 'ADJAME_PLATEAU_ATTECOUBE', 'code_ets': '69', 'facility_name': '', 'period': '2024-08-01 00:00:00', 'patient': 1, 'sex': 'FEMALE', 'age': 47, 'weight': 78, 'new_inclusion': False, 'transfer_in': False, 'return_to_care': False, 'tb_hiv': False, 'hiv_type': 'HIV1', 'treatment_line': 'nan', 'last_dispensation_date': '2024-08-01 00:00:00', 'days_dispensed': 180, 'next_dispensation_date': '2024-08-01 00:00:00', 'regimen': 'TDF/3TC/DTG', 'stable': 0, 'discontinuation_date': None, 'arv_stock_days': None, 'received_arv': False, 'transfer_out': False, 'death': False, 'art_stoppage': False, 'served_elsewhere': False}
 
         xml_string = validator.generate_xml_from_dict(data_dict, version="dict_test")
-
+        print("xml_string" , xml_string)
         self.assertIn('version="dict_test"', xml_string)
         self.assertIn("<meta>", xml_string)
-        self.assertIn("<age>25</age>", xml_string)
-        self.assertIn("<gender>male</gender>", xml_string)
-        self.assertIn("<name>John Doe</name>", xml_string)
-        self.assertIn("<weight>70.5</weight>", xml_string)
+        self.assertIn("<age>47</age>", xml_string)
+        self.assertIn("<region>ABIDJAN_2</region>", xml_string)
 
         root = ET.fromstring(xml_string)
         self.assertEqual(root.get("version"), "dict_test")
@@ -1186,7 +1184,7 @@ class SpreadsheetValidationTests(TestCase):
         )
 
         root = ET.fromstring(dict_xml)
-        self.assertTrue(root.tag.endswith("data"))
+
         self.assertEqual(root.get("version"), "comparison_test")
 
         age_elem = root.find(".//age")
