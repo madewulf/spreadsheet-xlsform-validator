@@ -178,6 +178,7 @@ class XLSFormValidator:
     def _extract_data_instance_template(self):
         """
         Extract the data instance template from the XLSForm XML.
+        Handles both standard <data> tags and Docker environment <None> tags.
         """
         if not self.survey_xml:
             return
@@ -187,7 +188,9 @@ class XLSFormValidator:
         
         for elem in root.iter():
             if elem.tag.endswith("data") or "data" in elem.tag:
-                # Store the data instance template
+                self.data_instance_template = elem
+                break
+            elif (elem.tag.endswith("None") or elem.tag == "None") and elem.get("id"):
                 self.data_instance_template = elem
                 break
 
