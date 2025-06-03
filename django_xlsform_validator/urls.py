@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import SpreadsheetValidationViewSet
 
-app_name = 'django_xlsform_validator'
+app_name = "django_xlsform_validator"
 
 router = DefaultRouter()
 router.register(r"validate", SpreadsheetValidationViewSet, basename="validate")

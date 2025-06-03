@@ -19,12 +19,12 @@ class SpreadsheetValidationSerializer(serializers.Serializer):
     )
     generate_xml = serializers.BooleanField(
         default=False,
-        help_text="Whether to generate XML files from the validated data."
+        help_text="Whether to generate XML files from the validated data.",
     )
     version = serializers.CharField(
         default="1.0",
         required=False,
-        help_text="Version string for generated XML files."
+        help_text="Version string for generated XML files.",
     )
 
     def validate_xlsform_file(self, value):
@@ -100,5 +100,5 @@ class ValidationResultSerializer(serializers.Serializer):
     xml_files = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        help_text="List of generated XML files if generate_xml was requested."
+        help_text="List of generated XML files if generate_xml was requested.",
     )

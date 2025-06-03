@@ -3,18 +3,15 @@ Validation module for XLSForm and spreadsheet data.
 """
 
 import pandas as pd
-import os
 import openpyxl
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Optional
 import re
 import uuid
 from elementpath import XPath1Parser, XPathContext
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element
 import json
 from pyxform import create_survey_from_xls, errors
 import io
-
-from . import app_settings
 
 
 class NamedBytesIO(io.BytesIO):
@@ -22,6 +19,7 @@ class NamedBytesIO(io.BytesIO):
     BytesIO wrapper that provides a .name attribute for compatibility with libraries
     that expect file-like objects with names (like pyxform).
     """
+
     def __init__(self, initial_bytes=None, name="temp_file"):
         if initial_bytes is not None:
             super().__init__(initial_bytes)
@@ -67,7 +65,7 @@ class XLSFormValidator:
 
             survey = create_survey_from_xls(memory_file)
             survey_json = survey.to_json()
-            
+
             self.survey_xml = survey.to_xml(validate=False)
             self._extract_data_instance_template()
 
@@ -96,8 +94,8 @@ class XLSFormValidator:
             NamedBytesIO: In-memory file object with the file content
         """
         file_obj.seek(0)
-        if hasattr(file_obj, 'chunks'):
-            file_content = b''.join(chunk for chunk in file_obj.chunks())
+        if hasattr(file_obj, "chunks"):
+            file_content = b"".join(chunk for chunk in file_obj.chunks())
         else:
             file_content = file_obj.read()
         file_obj.seek(0)
@@ -181,10 +179,11 @@ class XLSFormValidator:
         """
         if not self.survey_xml:
             return
-            
+
         import xml.etree.ElementTree as ET
+
         root = ET.fromstring(self.survey_xml)
-        
+
         for elem in root.iter():
             if elem.tag.endswith("data") or "data" in elem.tag:
                 # Store the data instance template
@@ -516,16 +515,18 @@ class XLSFormValidator:
             pattern_str = regex_match.group(1)
             try:
                 if isinstance(value, (int, float)) and not pd.isna(value):
-                    digit_pattern = r'^\^?\(?(\[0-9\]|\d)\{(\d+)\}'
+                    digit_pattern = r"^\^?\(?(\[0-9\]|\d)\{(\d+)\}"
                     digit_match = re.search(digit_pattern, pattern_str)
                     if digit_match:
                         expected_digits = int(digit_match.group(2))
-                        str_value = f"{int(value):0{expected_digits}d}" # Pad with zeros if necessary: this feels hackish, but works for now
+                        str_value = f"{int(value):0{expected_digits}d}"  # Pad with zeros if necessary: this feels hackish, but works for now
                     else:
-                        str_value = str(int(value)) if value == int(value) else str(value)
+                        str_value = (
+                            str(int(value)) if value == int(value) else str(value)
+                        )
                 else:
                     str_value = str(value)
-                
+
                 match_result = re.match(pattern_str, str_value)
                 if not match_result:
                     return f"Constraint '{constraint}' is not satisfied for value '{value}'"
@@ -663,59 +664,63 @@ class XLSFormValidator:
 
         return output_buffer
 
-    def generate_xml_from_spreadsheet(self, spreadsheet_file, version="1.0", skip_validation=False):
+    def generate_xml_from_spreadsheet(
+        self, spreadsheet_file, version="1.0", skip_validation=False
+    ):
         """
         Generate XML files from validated spreadsheet data.
-        
+
         Args:
             spreadsheet_file: The spreadsheet file object
             version: Version string for the XML files
             skip_validation: Skip validation if already validated
-            
+
         Returns:
             Iterator yielding XML strings for each row
         """
         if not skip_validation:
             validation_result = self.validate_spreadsheet(spreadsheet_file)
             if not validation_result["is_valid"]:
-                raise ValueError(f"Spreadsheet validation failed: {validation_result['errors']}")
-        
+                raise ValueError(
+                    f"Spreadsheet validation failed: {validation_result['errors']}"
+                )
+
         memory_file = self._save_temp_file(spreadsheet_file)
         memory_file.seek(0)
-        
+
         df = pd.read_excel(memory_file)
-        
+
         for _, row in df.iterrows():
             xml_string = self._generate_xml_for_row(row, version)
             yield xml_string
-    
+
     def _generate_xml_for_row(self, row, version):
         """
         Generate XML for a single spreadsheet row using the XLSForm data instance structure.
-        
+
         Args:
             row: Pandas Series representing a spreadsheet row
             version: Version string for the XML
-            
+
         Returns:
             str: XML string for the row
         """
         if not self.data_instance_template:
             raise ValueError("XLSForm must be parsed before generating XML")
-            
+
         import xml.etree.ElementTree as ET
         import copy
-        
+
         # Create a deep copy of the data instance template
         root = copy.deepcopy(self.data_instance_template)
-        
+
         if "xmlns" in root.attrib:
             del root.attrib["xmlns"]
-        
+
         for elem in root.iter():
             if elem.tag.startswith("{"):
                 elem.tag = elem.tag.split("}", 1)[1]
-        
+
         root.set("version", version)
         root.set("xmlns:h", "http://www.w3.org/1999/xhtml")
         root.set("xmlns:xsd", "http://www.w3.org/2001/XMLSchema")
@@ -723,28 +728,33 @@ class XLSFormValidator:
         root.set("xmlns:ev", "http://www.w3.org/2001/xml-events")
         root.set("xmlns:orx", "http://openrosa.org/xforms")
         root.set("xmlns:odk", "http://www.opendatakit.org/xforms")
-        
+
         for column_name, value in row.items():
             if pd.isna(value):
                 continue
-                
+
             question_name = self._resolve_column_to_question_name(column_name)
             if question_name is None:
-                question_name = column_name.lower().replace(' ', '_').replace('/', '_').replace('°', 'n')
-            
-            question_name = ''.join(c for c in question_name if c.isalnum() or c == '_')
-            
+                question_name = (
+                    column_name.lower()
+                    .replace(" ", "_")
+                    .replace("/", "_")
+                    .replace("°", "n")
+                )
+
+            question_name = "".join(c for c in question_name if c.isalnum() or c == "_")
+
             element = root.find(question_name)
             if element is None:
                 element = root.find(f".//{question_name}")
-            
+
             if element is not None:
                 if isinstance(value, (int, float)):
                     str_value = str(int(value)) if value == int(value) else str(value)
                 else:
                     str_value = str(value)
                 element.text = str_value
-        
+
         meta = root.find("meta")
         if meta is None:
             meta = root.find(".//meta")
@@ -752,24 +762,24 @@ class XLSFormValidator:
             instance_id = meta.find("instanceID")
             if instance_id is not None:
                 instance_id.text = f"uuid:{uuid.uuid4()}"
-        
-        return ET.tostring(root, encoding='unicode')
-    
+
+        return ET.tostring(root, encoding="unicode")
+
     def generate_xml_from_dict(self, data_dict, version="1.0"):
         """
         Generate XML from a dictionary of key-value pairs.
-        
+
         Args:
             data_dict: Dictionary containing question names/labels as keys and values as answers
             version: Version string for the XML file
-            
+
         Returns:
             str: XML string for the data
         """
         if not isinstance(data_dict, dict):
             raise ValueError("data_dict must be a dictionary")
-        
+
         row_series = pd.Series(data_dict)
-        
+
         xml_string = self._generate_xml_for_row(row_series, version)
         return xml_string

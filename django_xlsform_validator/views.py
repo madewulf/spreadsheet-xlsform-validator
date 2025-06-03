@@ -70,10 +70,12 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
 
         if result["is_valid"]:
             response_data = {"result": "valid"}
-            
+
             if generate_xml:
                 try:
-                    xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file, version, skip_validation=True)
+                    xml_generator = validator.generate_xml_from_spreadsheet(
+                        spreadsheet_file, version, skip_validation=True
+                    )
                     xml_files = list(xml_generator)
                     response_data["xml_files"] = xml_files
                 except Exception as e:
@@ -99,7 +101,9 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
             )
 
             highlighted_file_buffer.seek(0)
-            file_data_b64 = base64.b64encode(highlighted_file_buffer.read()).decode('utf-8')
+            file_data_b64 = base64.b64encode(highlighted_file_buffer.read()).decode(
+                "utf-8"
+            )
 
             request.session[f"validation_{validation_id}"] = {
                 "file_data": file_data_b64,
@@ -148,28 +152,30 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
             filename="highlighted_spreadsheet.xlsx",
         )
         return response
-        
+
     @action(detail=False, methods=["get"])
     def download_example(self, request):
         """
         Download example files for testing the validator.
         """
         file_type = request.GET.get("file")
-        
-        example_dir = getattr(app_settings, 'EXAMPLE_FILES_DIR', 'test_data')
-        
+
+        example_dir = getattr(app_settings, "EXAMPLE_FILES_DIR", "test_data")
+
         if file_type == "xlsform":
             file_path = os.path.join(example_dir, "file_active_validation_excel.xlsx")
             filename = "example_xlsform.xlsx"
         elif file_type == "spreadsheet":
-            file_path = os.path.join(example_dir, "sample_validation_data_file_active.xlsx")
+            file_path = os.path.join(
+                example_dir, "sample_validation_data_file_active.xlsx"
+            )
             filename = "example_spreadsheet.xlsx"
         else:
             raise Http404("Invalid file type")
-        
+
         if not os.path.exists(file_path):
             raise Http404("Example file not found")
-        
+
         response = FileResponse(
             open(file_path, "rb"),
             as_attachment=True,
