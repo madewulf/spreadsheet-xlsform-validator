@@ -629,7 +629,8 @@ class XLSFormValidator:
         for error in errors:
             if error["line"] > 1:  # Skip header row
                 cell = ws.cell(row=error["line"], column=error["column"])
-                cell.fill = red_fill
+                if cell is not None:
+                    cell.fill = red_fill
 
         errors_sheet = wb.create_sheet("Errors")
         errors_sheet.append(["Line", "Column", "Question", "Error Type", "Explanation"])
