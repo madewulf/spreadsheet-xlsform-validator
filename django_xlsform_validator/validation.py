@@ -55,7 +55,7 @@ class XLSFormValidator:
             survey = create_survey_from_xls(file_path)
             survey_json = survey.to_json()
             
-            self.survey_xml = survey.to_xml()
+            self.survey_xml = survey.to_xml(validate=False)
             self._extract_data_instance_template()
 
             # Parse the JSON to extract data structures for validation
