@@ -450,9 +450,9 @@ class SpreadsheetValidationTests(TestCase):
                 self.assertEqual(response.data["result"], "valid")
                 self.assertNotIn("errors", response.data)
 
-    def test_highlighted_excel_download(self):
+    def test_highlighted_excel_download_with_type_mismatch(self):
         """
-        Test downloading highlighted Excel file for invalid spreadsheet.
+        Test downloading highlighted Excel file for invalid spreadsheet with type mismatch.
         """
         with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as xlsform_file:
             with open(
