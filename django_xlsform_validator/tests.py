@@ -1072,7 +1072,7 @@ class SpreadsheetValidationTests(TestCase):
 
         self.assertEqual(len(uuids), len(set(uuids)), "All UUIDs should be unique")
 
-    def test_generate_xml_from_dict_basic(self):
+    def test_generate_xml_from_dict_basic(self, version="1.0"):
         """
         Test basic XML generation from dictionary.
         """
@@ -1089,15 +1089,15 @@ class SpreadsheetValidationTests(TestCase):
         #data_dict = {"age": 25, "gender": "male", "name": "John Doe", "weight": 70.5}
         data_dict = {'id': 1, 'number': 1, 'region': 'ABIDJAN_2', 'district': 'ADJAME_PLATEAU_ATTECOUBE', 'code_ets': '69', 'facility_name': '', 'period': '2024-08-01 00:00:00', 'patient': 1, 'sex': 'FEMALE', 'age': 47, 'weight': 78, 'new_inclusion': False, 'transfer_in': False, 'return_to_care': False, 'tb_hiv': False, 'hiv_type': 'HIV1', 'treatment_line': 'nan', 'last_dispensation_date': '2024-08-01 00:00:00', 'days_dispensed': 180, 'next_dispensation_date': '2024-08-01 00:00:00', 'regimen': 'TDF/3TC/DTG', 'stable': 0, 'discontinuation_date': None, 'arv_stock_days': None, 'received_arv': False, 'transfer_out': False, 'death': False, 'art_stoppage': False, 'served_elsewhere': False}
 
-        xml_string = validator.generate_xml_from_dict(data_dict, version="dict_test")
+        xml_string = validator.generate_xml_from_dict(data_dict, version=version)
         print("xml_string" , xml_string)
-        self.assertIn('version="dict_test"', xml_string)
+        self.assertIn(f'version="{version}"', xml_string)
         self.assertIn("<meta>", xml_string)
         self.assertIn("<age>47</age>", xml_string)
         self.assertIn("<region>ABIDJAN_2</region>", xml_string)
 
         root = ET.fromstring(xml_string)
-        self.assertEqual(root.get("version"), "dict_test")
+        self.assertEqual(root.get("version"), version)
 
         meta = root.find("meta")
         instance_id = meta.find("instanceID")
