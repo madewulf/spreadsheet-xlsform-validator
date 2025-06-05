@@ -1194,3 +1194,35 @@ class SpreadsheetValidationTests(TestCase):
         gender_elem = root.find(".//gender")
         self.assertIsNotNone(gender_elem)
         self.assertEqual(gender_elem.text, "male")
+
+    def test_active_validation_files(self):
+        """
+        Test validation with the provided active validation files.
+        Line 1 should pass for code identifier, line 2 should fail.
+        """
+        with open(
+            "django_xlsform_validator/test_data/file_active_validation_excel.xlsx", "rb"
+        ) as xlsform_file:
+            with open(
+                "django_xlsform_validator/test_data/sample_validation_data_file_active_modified.xlsx", "rb"
+            ) as spreadsheet_file:
+                response = self.client.post(
+                    self.url,
+                    {
+                        "xlsform_file": xlsform_file,
+                        "spreadsheet_file": spreadsheet_file,
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result"], "invalid")
+        self.assertIn("errors", response.data)
+        
+        errors = response.data["errors"]
+        line_2_errors = [error for error in errors if error.get("line") == 3]
+        self.assertTrue(len(line_2_errors) > 0, "Line 2 should have validation errors")
+        
+        line_1_errors = [error for error in errors if error.get("line") == 2]
+        code_id_errors_line_1 = [error for error in line_1_errors if "CODE IDENTIFIANT" in error.get("message", "")]
+        self.assertEqual(len(code_id_errors_line_1), 0, "Line 1 should not have code identifier errors")
