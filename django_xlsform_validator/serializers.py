@@ -80,6 +80,10 @@ class ValidationErrorSerializer(serializers.Serializer):
     question_name = serializers.CharField(
         help_text="The question name for the column with the error."
     )
+    constraint_message = serializers.CharField(
+        required=False,
+        help_text="Custom constraint message from XLSForm if available."
+    )
 
 
 class ValidationResultSerializer(serializers.Serializer):

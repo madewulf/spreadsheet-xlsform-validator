@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td>${error.question_name || 'N/A'}</td>
                         <td>${formatErrorType(error.error_type)}</td>
                         <td>${error.error_explanation}</td>
+                        <td>${error.constraint_message || ''}</td>
                     `;
                     
                     errorsTableBody.appendChild(row);
@@ -77,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td colspan="5" class="text-center">
+                <td colspan="6" class="text-center">
                     An error occurred while validating the spreadsheet. Please try again.
                 </td>
             `;

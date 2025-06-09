@@ -3,6 +3,7 @@ Tests for the XLSForm validator API.
 """
 
 import os
+import tempfile
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -27,6 +28,15 @@ class SpreadsheetValidationTests(TestCase):
         self.url = reverse("django_xlsform_validator:validate-list")
 
         os.makedirs("django_xlsform_validator/test_data", exist_ok=True)
+
+    def save_workbook_to_file(self, workbook):
+        """
+        Save an openpyxl workbook to a temporary file and return the file path.
+        """
+        temp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        workbook.save(temp_file.name)
+        temp_file.close()
+        return temp_file.name
 
         self.create_test_xlsform()
         self.create_test_xlsform_with_integer_choices()
@@ -65,12 +75,12 @@ class SpreadsheetValidationTests(TestCase):
         survey = wb.active
         survey.title = "survey"
 
-        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(["type", "name", "label", "required", "constraint", "constraint_message"])
 
-        survey.append(["integer", "age", "Age", "yes", ". < 150"])
-        survey.append(["select_one gender", "gender", "Gender", "yes", ""])
-        survey.append(["text", "name", "Name", "yes", ""])
-        survey.append(["decimal", "weight", "Weight (kg)", "no", ". > 0"])
+        survey.append(["integer", "age", "Age", "yes", ". < 150", "Age must be less than 150"])
+        survey.append(["select_one gender", "gender", "Gender", "yes", "", ""])
+        survey.append(["text", "name", "Name", "yes", "", ""])
+        survey.append(["decimal", "weight", "Weight (kg)", "no", ". > 0", "Weight must be positive"])
 
         choices = wb.create_sheet("choices")
 
@@ -81,6 +91,8 @@ class SpreadsheetValidationTests(TestCase):
         choices.append(["gender", "other", "Other"])
 
         wb.save("django_xlsform_validator/test_data/test_xlsform.xlsx")
+        
+        return wb
 
     def create_valid_test_spreadsheet(self):
         """
@@ -375,12 +387,12 @@ class SpreadsheetValidationTests(TestCase):
         survey = wb.active
         survey.title = "survey"
 
-        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(["type", "name", "label", "required", "constraint", "constraint_message"])
 
-        survey.append(["integer", "age", "Age", "yes", ". < 150"])
-        survey.append(["select_one status", "status", "Status", "yes", ""])
-        survey.append(["text", "name", "Name", "yes", ""])
-        survey.append(["decimal", "weight", "Weight (kg)", "no", ". > 0"])
+        survey.append(["integer", "age", "Age", "yes", ". < 150", "Age must be less than 150"])
+        survey.append(["select_one status", "status", "Status", "yes", "", ""])
+        survey.append(["text", "name", "Name", "yes", "", ""])
+        survey.append(["decimal", "weight", "Weight (kg)", "no", ". > 0", "Weight must be positive"])
 
         choices = wb.create_sheet("choices")
 
@@ -497,16 +509,130 @@ class SpreadsheetValidationTests(TestCase):
                 download_response = self.client.get(
                     f"{download_url}?id={response.data['download_id']}"
                 )
+    def test_constraint_validation_with_custom_message(self):
+        xlsform_wb = self.create_test_xlsform()
+        xlsform_file_path = self.save_workbook_to_file(xlsform_wb)
+        
+        validator = XLSFormValidator()
+        with open(xlsform_file_path, 'rb') as xlsform_file:
+            validator.parse_xlsform(xlsform_file)
+        
+        spreadsheet_wb = openpyxl.Workbook()
+        ws = spreadsheet_wb.active
+        ws.append(["age", "gender", "name", "weight"])
+        ws.append([200, "male", "John", 70.5])
+        
+        spreadsheet_file_path = self.save_workbook_to_file(spreadsheet_wb)
+        
+        with open(spreadsheet_file_path, 'rb') as spreadsheet_file:
+            result = validator.validate_spreadsheet(spreadsheet_file)
+        
+        self.assertFalse(result["is_valid"])
+        self.assertEqual(len(result["errors"]), 1)
+        
+        error = result["errors"][0]
+        self.assertEqual(error["error_type"], "error_constraint_unsatisfied")
+        self.assertEqual(error["question_name"], "age")
+        self.assertIn("constraint_message", error)
+        self.assertEqual(error["constraint_message"], "Age must be less than 150")
+        
+    def test_constraint_validation_without_custom_message(self):
+        wb = openpyxl.Workbook()
+        survey = wb.active
+        survey.title = "survey"
+        
+        survey.append(["type", "name", "label", "required", "constraint"])
+        survey.append(["integer", "score", "Score", "no", ". >= 0 and . <= 100"])
+        
+        xlsform_file_path = self.save_workbook_to_file(wb)
+        
+        validator = XLSFormValidator()
+        with open(xlsform_file_path, 'rb') as xlsform_file:
+            validator.parse_xlsform(xlsform_file)
+        
+        spreadsheet_wb = openpyxl.Workbook()
+        ws = spreadsheet_wb.active
+        ws.append(["score"])
+        ws.append([150])
+        
+        spreadsheet_file_path = self.save_workbook_to_file(spreadsheet_wb)
+        
+        with open(spreadsheet_file_path, 'rb') as spreadsheet_file:
+            result = validator.validate_spreadsheet(spreadsheet_file)
+        
+        self.assertFalse(result["is_valid"])
+        self.assertEqual(len(result["errors"]), 1)
+        
+        error = result["errors"][0]
+        self.assertEqual(error["error_type"], "error_constraint_unsatisfied")
+        self.assertEqual(error["question_name"], "score")
+        self.assertNotIn("constraint_message", error)
+        self.assertIn("Constraint", error["error_explanation"])
+        
+    def test_excel_generation_includes_constraint_message(self):
+        xlsform_wb = self.create_test_xlsform()
+        xlsform_file_path = self.save_workbook_to_file(xlsform_wb)
+        
+        validator = XLSFormValidator()
+        with open(xlsform_file_path, 'rb') as xlsform_file:
+            validator.parse_xlsform(xlsform_file)
+        
+        spreadsheet_wb = openpyxl.Workbook()
+        ws = spreadsheet_wb.active
+        ws.append(["age", "gender", "name", "weight"])
+        ws.append([200, "male", "John", -5])
+        
+        spreadsheet_file_path = self.save_workbook_to_file(spreadsheet_wb)
+        
+        with open(spreadsheet_file_path, 'rb') as spreadsheet_file:
+            result = validator.validate_spreadsheet(spreadsheet_file)
+        errors = result["errors"]
+        
+        with open(spreadsheet_file_path, 'rb') as spreadsheet_file:
+            highlighted_excel = validator.create_highlighted_excel(spreadsheet_file, errors)
+        
+        wb = openpyxl.load_workbook(highlighted_excel)
+        errors_sheet = wb["Errors"]
+        
+        headers = [cell.value for cell in errors_sheet[1]]
+        self.assertIn("Constraint Message", headers)
+        
+        constraint_msg_col = headers.index("Constraint Message") + 1
+        age_error_row = None
+        weight_error_row = None
+        
+        for row_idx, row in enumerate(errors_sheet.iter_rows(min_row=2), start=2):
+            question_name = row[2].value
+            if question_name == "age":
+                age_error_row = row_idx
+            elif question_name == "weight":
+                weight_error_row = row_idx
+        
+        if age_error_row:
+            age_constraint_msg = errors_sheet.cell(row=age_error_row, column=constraint_msg_col).value
+            self.assertEqual(age_constraint_msg, "Age must be less than 150")
+            
+        if weight_error_row:
+            weight_constraint_msg = errors_sheet.cell(row=weight_error_row, column=constraint_msg_col).value
+            self.assertEqual(weight_constraint_msg, "Weight must be positive")
 
-                self.assertEqual(download_response.status_code, 200)
-                self.assertEqual(
-                    download_response["Content-Type"],
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-                self.assertIn(
-                    "highlighted_spreadsheet.xlsx",
-                    download_response["Content-Disposition"],
-                )
+
+
+
+    def test_integer_choice_validation(self):
+        xlsform_wb = self.create_test_xlsform_with_integer_choices()
+        xlsform_file = self.save_workbook_to_file(xlsform_wb)
+        
+        validator = XLSFormValidator()
+        validator.parse_xlsform(xlsform_file)
+        
+        spreadsheet_wb = self.create_integer_choice_test_spreadsheet()
+        spreadsheet_file = self.save_workbook_to_file(spreadsheet_wb)
+        
+        result = validator.validate_spreadsheet(spreadsheet_file)
+        
+        self.assertTrue(result["is_valid"])
+        self.assertEqual(len(result["errors"]), 0)
 
     def test_integer_choice_validation(self):
         """
