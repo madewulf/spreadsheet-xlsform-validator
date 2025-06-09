@@ -43,6 +43,7 @@ class XLSFormValidator:
         self.choices_sheet = None
         self.question_types = {}
         self.question_constraints = {}
+        self.question_constraint_messages = {}
         self.required_questions = set()
         self.choice_lists = {}
         self.question_labels = {}  # Map labels to question names
@@ -148,6 +149,8 @@ class XLSFormValidator:
 
         if "bind" in node and "constraint" in node["bind"]:
             self.question_constraints[name] = node["bind"]["constraint"]
+            if "jr:constraintMsg" in node["bind"]:
+                self.question_constraint_messages[name] = node["bind"]["jr:constraintMsg"]
 
     def _extract_choices_from_pyxform(self, parsed_survey: dict):
         """
@@ -211,6 +214,7 @@ class XLSFormValidator:
         if xlsform_data:
             self.question_types = {}
             self.question_constraints = {}
+            self.question_constraint_messages = {}
             self.required_questions = set()
             self.choice_lists = {}
             self.question_labels = {}
@@ -246,6 +250,10 @@ class XLSFormValidator:
                             row.get("constraint")
                         ):
                             self.question_constraints[name] = row["constraint"]
+                            if "constraint_message" in survey_df.columns and not pd.isna(
+                                row.get("constraint_message")
+                            ):
+                                self.question_constraint_messages[name] = row["constraint_message"]
 
                 if choices_df is not None and isinstance(choices_df, pd.DataFrame):
                     for _, row in choices_df.iterrows():
@@ -357,15 +365,16 @@ class XLSFormValidator:
                         value, self.question_constraints[question_name], question_name
                     )
                     if constraint_error:
-                        errors.append(
-                            {
-                                "line": row_idx + 2,
-                                "column": col_idx + 1,
-                                "error_type": ERROR_CONSTRAINT_UNSATISFIED,
-                                "error_explanation": constraint_error,
-                                "question_name": question_name,
-                            }
-                        )
+                        error_dict = {
+                            "line": row_idx + 2,
+                            "column": col_idx + 1,
+                            "error_type": ERROR_CONSTRAINT_UNSATISFIED,
+                            "error_explanation": constraint_error,
+                            "question_name": question_name,
+                        }
+                        if question_name in self.question_constraint_messages:
+                            error_dict["constraint_message"] = self.question_constraint_messages[question_name]
+                        errors.append(error_dict)
 
         return errors
 
@@ -554,7 +563,10 @@ class XLSFormValidator:
         if self._evaluate_xpath_constraint(constraint, processed_value):
             return None
         else:
-            return f"Constraint '{constraint}' is not satisfied for value '{value}'"
+            if question_name in self.question_constraint_messages:
+                return self.question_constraint_messages[question_name]
+            else:
+                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
 
     def _evaluate_xpath_constraint(self, expression: str, value) -> bool:
         """
@@ -650,9 +662,10 @@ class XLSFormValidator:
                     cell.fill = red_fill
 
         errors_sheet = wb.create_sheet("Errors")
-        errors_sheet.append(["Line", "Column", "Question", "Error Type", "Explanation"])
+        errors_sheet.append(["Line", "Column", "Question", "Error Type", "Explanation", "Constraint Message"])
 
         for error in errors:
+            constraint_message = error.get("constraint_message", "")
             errors_sheet.append(
                 [
                     error["line"],
@@ -660,6 +673,7 @@ class XLSFormValidator:
                     error["question_name"],
                     error["error_type"],
                     error["error_explanation"],
+                    constraint_message,
                 ]
             )
 
