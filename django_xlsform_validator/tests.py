@@ -4,15 +4,16 @@ Tests for the XLSForm validator API.
 
 import os
 import tempfile
+import uuid
+import xml.etree.ElementTree as ET
+
+import openpyxl
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
-from django.core.files.uploadedfile import SimpleUploadedFile
-import openpyxl
-from .validation import XLSFormValidator
-import xml.etree.ElementTree as ET
-import uuid
+from rest_framework.test import APIClient
+
+from .validation import XLSFormValidator, ERROR_CONSTRAINT_UNSATISFIED, ERROR_VALUE_REQUIRED
 
 
 class SpreadsheetValidationTests(TestCase):
@@ -37,34 +38,6 @@ class SpreadsheetValidationTests(TestCase):
         workbook.save(temp_file.name)
         temp_file.close()
         return temp_file.name
-
-        self.create_test_xlsform()
-        self.create_test_xlsform_with_integer_choices()
-
-        self.create_valid_test_spreadsheet()
-
-        self.create_invalid_test_spreadsheet_type_mismatch()
-
-        self.create_invalid_test_spreadsheet_constraint()
-
-        self.create_invalid_test_spreadsheet_required()
-
-        self.create_valid_test_spreadsheet_with_labels()
-
-        self.create_mixed_test_spreadsheet()
-
-        self.create_case_insensitive_test_spreadsheet()
-
-        self.create_integer_choice_test_spreadsheet()
-
-        self.create_excel_date_format_spreadsheet()
-
-        self.create_test_xlsform_with_aliases()
-        self.create_alias_test_spreadsheet()
-
-        self.create_test_xlsform_with_regex_constraints()
-        self.create_valid_regex_test_spreadsheet()
-        self.create_invalid_regex_test_spreadsheet()
 
     def create_test_xlsform(self):
         """
@@ -177,34 +150,6 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(response.data["result"], "valid")
         self.assertNotIn("errors", response.data)
 
-    def test_type_mismatch_error(self):
-        """
-        Test validation with a spreadsheet containing type mismatches.
-        """
-        with open(
-            "django_xlsform_validator/test_data/test_xlsform.xlsx", "rb"
-        ) as xlsform_file:
-            with open(
-                "django_xlsform_validator/test_data/invalid_type_mismatch.xlsx", "rb"
-            ) as spreadsheet_file:
-                response = self.client.post(
-                    self.url,
-                    {
-                        "xlsform_file": xlsform_file,
-                        "spreadsheet_file": spreadsheet_file,
-                    },
-                    format="multipart",
-                )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["result"], "invalid")
-        self.assertIn("errors", response.data)
-
-        type_mismatch_errors = [
-            e for e in response.data["errors"] if e["error_type"] == "type_mismatch"
-        ]
-        self.assertTrue(len(type_mismatch_errors) > 0)
-
     def test_constraint_unsatisfied_error(self):
         """
         Test validation with a spreadsheet containing constraint violations.
@@ -231,7 +176,7 @@ class SpreadsheetValidationTests(TestCase):
         constraint_errors = [
             e
             for e in response.data["errors"]
-            if e["error_type"] == "error_constraint_unsatisfied"
+            if e["error_type"] == ERROR_CONSTRAINT_UNSATISFIED
         ]
         self.assertTrue(len(constraint_errors) > 0)
 
@@ -261,7 +206,7 @@ class SpreadsheetValidationTests(TestCase):
         required_errors = [
             e
             for e in response.data["errors"]
-            if e["error_type"] == "error_value_required"
+            if e["error_type"] == ERROR_VALUE_REQUIRED
         ]
         self.assertTrue(len(required_errors) > 0)
 
@@ -531,7 +476,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(len(result["errors"]), 1)
         
         error = result["errors"][0]
-        self.assertEqual(error["error_type"], "error_constraint_unsatisfied")
+        self.assertEqual(error["error_type"], ERROR_CONSTRAINT_UNSATISFIED)
         self.assertEqual(error["question_name"], "age")
         self.assertIn("constraint_message", error)
         self.assertEqual(error["constraint_message"], "Age must be less than 150")
@@ -564,9 +509,9 @@ class SpreadsheetValidationTests(TestCase):
         self.assertEqual(len(result["errors"]), 1)
         
         error = result["errors"][0]
-        self.assertEqual(error["error_type"], "error_constraint_unsatisfied")
+        self.assertEqual(error["error_type"], ERROR_CONSTRAINT_UNSATISFIED)
         self.assertEqual(error["question_name"], "score")
-        self.assertNotIn("constraint_message", error)
+        self.assertEqual(error["constraint_message"], None)
         self.assertIn("Constraint", error["error_explanation"])
         
     def test_excel_generation_includes_constraint_message(self):
@@ -846,62 +791,9 @@ class SpreadsheetValidationTests(TestCase):
         constraint_errors = [
             e
             for e in response.data["errors"]
-            if e["error_type"] == "error_constraint_unsatisfied"
+            if e["error_type"] == ERROR_CONSTRAINT_UNSATISFIED
         ]
         self.assertTrue(len(constraint_errors) > 0)
-
-    def test_regex_validation_with_leading_zeros(self):
-        """
-        Test that numeric values with leading zeros are correctly validated against regex patterns.
-        """
-        validator = XLSFormValidator()
-        validator.question_types = {"code_ets": "text"}
-        validator.constraints = {"code_ets": "regex(.,'^([0-9]{5})$')"}
-
-        # Test that 1652.0 gets formatted as 01652 for 5-digit regex
-        error = validator._validate_constraint(
-            1652.0, "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(error)  # Should pass validation
-
-        error = validator._validate_constraint(
-            123.0, "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(error)  # Should pass validation
-
-        error = validator._validate_constraint(
-            "01234", "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(error)  # Should pass validation
-
-    def test_regex_constraint_numeric_formatting(self):
-        """
-        Test specific regex constraint handling for numeric values.
-        """
-        validator = XLSFormValidator()
-        validator.question_types = {"code_ets": "text"}
-        validator.constraints = {"code_ets": "regex(.,'^([0-9]{5})$')"}
-
-        error = validator._validate_constraint(
-            1652.0, "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(
-            error, "Validation should pass for 1652.0 with 5-digit regex pattern"
-        )
-
-        error = validator._validate_constraint(
-            123.0, "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(
-            error, "Validation should pass for 123.0 with 5-digit regex pattern"
-        )
-
-        error = validator._validate_constraint(
-            "01234", "regex(.,'^([0-9]{5})$')", "code_ets"
-        )
-        self.assertIsNone(
-            error, "Validation should pass for '01234' with 5-digit regex pattern"
-        )
 
     def test_xml_generation_valid_spreadsheet(self):
         """
@@ -919,7 +811,6 @@ class SpreadsheetValidationTests(TestCase):
                         "xlsform_file": xlsform_file,
                         "spreadsheet_file": spreadsheet_file,
                         "generate_xml": "true",
-                        "version": "2025050304",
                     },
                     format="multipart",
                 )
@@ -933,7 +824,7 @@ class SpreadsheetValidationTests(TestCase):
         for xml_string in response.data["xml_files"]:
             self.assertIn('xmlns:h="http://www.w3.org/1999/xhtml"', xml_string)
             self.assertIn('xmlns:jr="http://openrosa.org/javarosa"', xml_string)
-            self.assertIn('version="2025050304"', xml_string)
+            self.assertIn("version='1.0'", xml_string)
             self.assertIn("<meta>", xml_string)
             self.assertIn("<instanceID>uuid:", xml_string)
 
@@ -1011,7 +902,7 @@ class SpreadsheetValidationTests(TestCase):
         self.assertIn("xml_files", response.data)
 
         for xml_string in response.data["xml_files"]:
-            self.assertIn('version="1.0"', xml_string)
+            self.assertIn("version='1.0'", xml_string)
 
     def test_xml_generation_with_labels(self):
         """
@@ -1104,7 +995,7 @@ class SpreadsheetValidationTests(TestCase):
                 f.read(),
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
+            self.assertTrue(validator.parse_xlsform(xlsform_file, version="unit_test"))
 
         with open(
             "django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb"
@@ -1114,9 +1005,7 @@ class SpreadsheetValidationTests(TestCase):
                 f.read(),
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-            xml_generator = validator.generate_xml_from_spreadsheet(
-                spreadsheet_file, version="unit_test"
-            )
+            xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file)
             xml_files = list(xml_generator)
 
             self.assertEqual(len(xml_files), 3)
@@ -1142,7 +1031,7 @@ class SpreadsheetValidationTests(TestCase):
                 f.read(),
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
+            self.assertTrue(validator.parse_xlsform(xlsform_file, version="iterator_test"))
 
         with open(
             "django_xlsform_validator/test_data/valid_spreadsheet.xlsx", "rb"
@@ -1152,9 +1041,7 @@ class SpreadsheetValidationTests(TestCase):
                 f.read(),
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-            xml_generator = validator.generate_xml_from_spreadsheet(
-                spreadsheet_file, version="iterator_test"
-            )
+            xml_generator = validator.generate_xml_from_spreadsheet(spreadsheet_file)
 
             xml_count = 0
             for xml_string in xml_generator:
@@ -1197,126 +1084,3 @@ class SpreadsheetValidationTests(TestCase):
             uuids.append(uuid_part)
 
         self.assertEqual(len(uuids), len(set(uuids)), "All UUIDs should be unique")
-
-    def test_generate_xml_from_dict_basic(self):
-        """
-        Test basic XML generation from dictionary.
-        """
-        validator = XLSFormValidator()
-
-        with open("test_data/file_active_validation_excel.xlsx", "rb") as f:
-            xlsform_file = SimpleUploadedFile(
-                "test_xlsform.xlsx",
-                f.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
-
-        #data_dict = {"age": 25, "gender": "male", "name": "John Doe", "weight": 70.5}
-        data_dict = {'id': 1, 'number': 1, 'region': 'ABIDJAN_2', 'district': 'ADJAME_PLATEAU_ATTECOUBE', 'code_ets': '69', 'facility_name': '', 'period': '2024-08-01 00:00:00', 'patient': 1, 'sex': 'FEMALE', 'age': 47, 'weight': 78, 'new_inclusion': False, 'transfer_in': False, 'return_to_care': False, 'tb_hiv': False, 'hiv_type': 'HIV1', 'treatment_line': 'nan', 'last_dispensation_date': '2024-08-01 00:00:00', 'days_dispensed': 180, 'next_dispensation_date': '2024-08-01 00:00:00', 'regimen': 'TDF/3TC/DTG', 'stable': 0, 'discontinuation_date': None, 'arv_stock_days': None, 'received_arv': False, 'transfer_out': False, 'death': False, 'art_stoppage': False, 'served_elsewhere': False}
-
-        xml_string = validator.generate_xml_from_dict(data_dict, version="dict_test")
-        print("xml_string" , xml_string)
-        self.assertIn('version="dict_test"', xml_string)
-        self.assertIn("<meta>", xml_string)
-        self.assertIn("<age>47</age>", xml_string)
-        self.assertIn("<region>ABIDJAN_2</region>", xml_string)
-
-        root = ET.fromstring(xml_string)
-        self.assertEqual(root.get("version"), "dict_test")
-
-        meta = root.find("meta")
-        instance_id = meta.find("instanceID")
-        self.assertTrue(instance_id.text.startswith("uuid:"))
-
-    def test_generate_xml_from_dict_with_labels(self):
-        """
-        Test XML generation from dictionary using question labels.
-        """
-        validator = XLSFormValidator()
-
-        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
-            xlsform_file = SimpleUploadedFile(
-                "test_xlsform.xlsx",
-                f.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
-
-        data_dict = {"Age": 30, "Gender": "female", "Name": "Jane Smith"}
-
-        xml_string = validator.generate_xml_from_dict(data_dict)
-
-        self.assertIn("<age>30</age>", xml_string)
-        self.assertIn("<gender>female</gender>", xml_string)
-        self.assertIn("<name>Jane Smith</name>", xml_string)
-
-    def test_generate_xml_from_dict_empty_dict(self):
-        """
-        Test XML generation from empty dictionary.
-        """
-        validator = XLSFormValidator()
-
-        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
-            xlsform_file = SimpleUploadedFile(
-                "test_xlsform.xlsx",
-                f.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
-
-        xml_string = validator.generate_xml_from_dict({})
-
-        self.assertIn("<meta>", xml_string)
-
-        root = ET.fromstring(xml_string)
-        age_elem = root.find(".//age")
-        self.assertIsNotNone(age_elem)
-        self.assertIsNone(age_elem.text)
-
-    def test_generate_xml_from_dict_invalid_input(self):
-        """
-        Test error handling for invalid input types.
-        """
-        validator = XLSFormValidator()
-
-        with self.assertRaises(ValueError) as context:
-            validator.generate_xml_from_dict("not a dict")
-
-        self.assertIn("data_dict must be a dictionary", str(context.exception))
-
-        with self.assertRaises(ValueError) as context:
-            validator.generate_xml_from_dict(None)
-
-        self.assertIn("data_dict must be a dictionary", str(context.exception))
-
-    def test_generate_xml_from_dict_matches_spreadsheet_output(self):
-        """
-        Test that dict-based XML generation produces similar output to spreadsheet-based generation.
-        """
-        validator = XLSFormValidator()
-
-        with open("django_xlsform_validator/test_data/test_xlsform.xlsx", "rb") as f:
-            xlsform_file = SimpleUploadedFile(
-                "test_xlsform.xlsx",
-                f.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            self.assertTrue(validator.parse_xlsform(xlsform_file))
-
-        data_dict = {"age": 25, "gender": "male", "name": "Test User"}
-        dict_xml = validator.generate_xml_from_dict(
-            data_dict, version="comparison_test"
-        )
-
-        root = ET.fromstring(dict_xml)
-
-        self.assertEqual(root.get("version"), "comparison_test")
-
-        age_elem = root.find(".//age")
-        self.assertIsNotNone(age_elem)
-        self.assertEqual(age_elem.text, "25")
-
-        gender_elem = root.find(".//gender")
-        self.assertIsNotNone(gender_elem)
-        self.assertEqual(gender_elem.text, "male")

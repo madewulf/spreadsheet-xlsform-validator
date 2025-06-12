@@ -2,16 +2,18 @@
 Validation module for XLSForm and spreadsheet data.
 """
 
-import pandas as pd
-import openpyxl
-from typing import Dict, List, Any, Optional
-import re
-import uuid
-from elementpath import XPath1Parser, XPathContext
-from xml.etree.ElementTree import Element
-import json
-from pyxform import create_survey_from_xls, errors
 import io
+import json
+import tempfile
+from cmath import isnan
+from typing import Dict, List, Any, Optional
+
+import openpyxl
+import pandas as pd
+from pandas import Timestamp
+from pyxform import create_survey_from_xls, errors
+
+from xlsform_validator.odk_validate import check_xform, ODKValidateError
 
 
 class NamedBytesIO(io.BytesIO):
@@ -29,8 +31,8 @@ class NamedBytesIO(io.BytesIO):
 
 
 ERROR_TYPE_MISMATCH = "type_mismatch"
-ERROR_CONSTRAINT_UNSATISFIED = "error_constraint_unsatisfied"
-ERROR_VALUE_REQUIRED = "error_value_required"
+ERROR_CONSTRAINT_UNSATISFIED = "Answer is violating a constraint"
+ERROR_VALUE_REQUIRED = "Answer was required but empty"
 
 
 class XLSFormValidator:
@@ -39,39 +41,33 @@ class XLSFormValidator:
     """
 
     def __init__(self):
-        self.survey_sheet = None
-        self.choices_sheet = None
-        self.question_types = {}
+        self.question_types: dict[str, str] = {}
+        self.choice_lists: dict[str, list[str]] = {}
+        self.question_labels: dict[str, str] = {}  # Map labels to question names
+        self.choice_aliases: dict[str, dict[str, str]] = {}  # Map list_name to dict of alias -> choice_value
         self.question_constraints = {}
         self.question_constraint_messages = {}
-        self.required_questions = set()
-        self.choice_lists = {}
-        self.question_labels = {}  # Map labels to question names
-        self.choice_aliases = {}  # Map list_name to dict of alias -> choice_value
-        self.survey_xml = None  # Store the XLSForm XML structure
-        self.data_instance_template = None  # Store the data instance template
+        self.survey_xml: Optional[str] = None  # Store the XLSForm XML structure
 
-    def parse_xlsform(self, xlsform_file) -> bool:
+    def parse_xlsform(self, xlsform_file, version: str = '1.0') -> bool:
         """
         Parse the XLSForm file using pyxform to extract survey structure.
 
         Args:
             xlsform_file: The XLSForm file object
+            version: Version string for the XML files
 
         Returns:
             bool: True if parsing was successful, False otherwise
         """
         try:
             memory_file = self._save_temp_file(xlsform_file)
-
             survey = create_survey_from_xls(memory_file)
+            survey.version = version
             survey_json = survey.to_json()
 
             self.survey_xml = survey.to_xml(validate=False)
-            self._extract_data_instance_template()
-
             parsed_survey = json.loads(survey_json)
-
             self._extract_questions_from_pyxform(parsed_survey)
 
             self._extract_choices_from_pyxform(parsed_survey)
@@ -84,7 +80,8 @@ class XLSFormValidator:
             print(f"Error parsing XLSForm: {str(e)}")
             return False
 
-    def _save_temp_file(self, file_obj) -> NamedBytesIO:
+    @staticmethod
+    def _save_temp_file(file_obj) -> NamedBytesIO:
         """
         Save uploaded file content to an in-memory BytesIO object.
 
@@ -131,7 +128,8 @@ class XLSFormValidator:
 
         name = node["name"]
         q_type = node["type"]
-
+        if q_type.startswith("select"):
+            q_type = q_type + " " + node["list_name"]
         if name == "meta" or q_type == "group":
             if "children" in node:
                 for child in node["children"]:
@@ -143,9 +141,6 @@ class XLSFormValidator:
         if "label" in node:
             label = node["label"]
             self.question_labels[label] = name
-
-        if "bind" in node and node["bind"].get("required") == "yes":
-            self.required_questions.add(name)
 
         if "bind" in node and "constraint" in node["bind"]:
             self.question_constraints[name] = node["bind"]["constraint"]
@@ -176,119 +171,27 @@ class XLSFormValidator:
                         alias_value = choice["alias"]
                         self.choice_aliases[list_name][alias_value] = choice_value
 
-    def _extract_data_instance_template(self):
-        """
-        Extract the data instance template from the XLSForm XML.
-        Handles both standard <data> tags and Docker environment <None> tags.
-        """
-        if not self.survey_xml:
-            return
-
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(self.survey_xml)
-
-        for elem in root.iter():
-            # Check for standard data tags
-            if elem.tag.endswith("data") or "data" in elem.tag:
-                self.data_instance_template = elem
-                break
-            # Handle Docker environment where pyxform generates <None> tags
-            # Look for elements with an 'id' attribute that appears to be a form ID
-            elif (elem.tag.endswith("None") or elem.tag == "None") and elem.get("id"):
-                self.data_instance_template = elem
-                break
-
     def validate_spreadsheet(
-        self, spreadsheet_file, xlsform_data=None
-    ) -> Dict[str, Any]:
+            self, spreadsheet_file
+    ) -> Dict:
         """
         Validate a spreadsheet against the XLSForm.
 
         Args:
             spreadsheet_file: The spreadsheet file object
-            xlsform_data: Optional XLSForm data if already parsed
 
         Returns:
             Dict: Validation result with 'is_valid' flag and 'errors' list if invalid
         """
-        if xlsform_data:
-            self.question_types = {}
-            self.question_constraints = {}
-            self.question_constraint_messages = {}
-            self.required_questions = set()
-            self.choice_lists = {}
-            self.question_labels = {}
-            self.choice_aliases = {}
 
-            if isinstance(xlsform_data, dict):
-                survey_df = xlsform_data.get("survey")
-                choices_df = xlsform_data.get("choices")
+        memory_file = self._save_temp_file(spreadsheet_file)
+        memory_file.seek(0)
 
-                if survey_df is not None and isinstance(survey_df, pd.DataFrame):
-                    for _, row in survey_df.iterrows():
-                        if pd.isna(row.get("name")) or pd.isna(row.get("type")):
-                            continue
-
-                        name = row["name"]
-                        q_type = row["type"]
-
-                        self.question_types[name] = q_type
-
-                        if "label" in survey_df.columns and not pd.isna(
-                            row.get("label")
-                        ):
-                            label = row["label"]
-                            self.question_labels[label] = name
-
-                        if (
-                            "required" in survey_df.columns
-                            and row.get("required") == "yes"
-                        ):
-                            self.required_questions.add(name)
-
-                        if "constraint" in survey_df.columns and not pd.isna(
-                            row.get("constraint")
-                        ):
-                            self.question_constraints[name] = row["constraint"]
-                            if "constraint_message" in survey_df.columns and not pd.isna(
-                                row.get("constraint_message")
-                            ):
-                                self.question_constraint_messages[name] = row["constraint_message"]
-
-                if choices_df is not None and isinstance(choices_df, pd.DataFrame):
-                    for _, row in choices_df.iterrows():
-                        if pd.isna(row.get("list_name")) or pd.isna(row.get("name")):
-                            continue
-
-                        list_name = row["list_name"]
-                        choice_value = row["name"]
-
-                        if list_name not in self.choice_lists:
-                            self.choice_lists[list_name] = []
-                            self.choice_aliases[list_name] = {}
-
-                        self.choice_lists[list_name].append(choice_value)
-
-                        if "alias" in choices_df.columns and not pd.isna(
-                            row.get("alias")
-                        ):
-                            alias_value = row["alias"]
-                            self.choice_aliases[list_name][alias_value] = choice_value
+        df = pd.read_excel(memory_file, dtype=str)
 
         try:
-            memory_file = self._save_temp_file(spreadsheet_file)
-            memory_file.seek(0)
-
-            df = pd.read_excel(memory_file)
-
-            errors = self._validate_spreadsheet_data(df)
-
-            if errors:
-                return {"is_valid": False, "errors": errors}
-            else:
-                return {"is_valid": True}
-        except Exception as e:
-            print(f"Error validating spreadsheet: {str(e)}")
+            results = self._validate_spreadsheet_data(df)
+        except Exception:
             return {
                 "is_valid": False,
                 "errors": [
@@ -296,13 +199,22 @@ class XLSFormValidator:
                         "line": 0,
                         "column": 0,
                         "error_type": "error_parsing",
-                        "error_explanation": f"Error parsing spreadsheet: {str(e)}",
+                        "error_explanation": "Failed to parse XLSForm file. Make sure it contains 'survey' and 'choices' sheets.",
                         "question_name": "",
                     }
                 ],
             }
 
-    def _validate_spreadsheet_data(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        valides = list(filter(lambda x: 'xml' in x, results))
+        errors = list(filter(lambda x: 'xml' not in x, results))
+
+        return {
+            "is_valid": len(errors) == 0,
+            "errors": errors,
+            "valides": valides,
+        }
+
+    def _validate_spreadsheet_data(self, df: pd.DataFrame) -> List[Dict]:
         """
         Validate the spreadsheet data against the XLSForm.
 
@@ -312,305 +224,40 @@ class XLSFormValidator:
         Returns:
             List: List of error dictionaries
         """
-        errors = []
-
-        header_errors = self._validate_headers(df.columns)
-        errors.extend(header_errors)
-
-        if header_errors:
-            return errors
-
+        results = []
+        answers = {}
         for col_idx, column in enumerate(df.columns):
             question_name = self._resolve_column_to_question_name(column)
             if question_name is None:
                 continue
 
-            question_type = self.question_types[question_name]
-
             for row_idx, value in enumerate(df[column]):
-                if pd.isna(value):
-                    if question_name in self.required_questions:
-                        errors.append(
-                            {
-                                "line": row_idx
-                                + 2,  # +2 because pandas is 0-indexed and Excel has a header row
-                                "column": col_idx + 1,
-                                "error_type": ERROR_VALUE_REQUIRED,
-                                "error_explanation": f"Value is required for question '{question_name}'",
-                                "question_name": question_name,
-                            }
-                        )
-                    continue
+                existing = answers.get(row_idx)
+                if not existing:
+                    answers[row_idx] = {}
+                    existing = answers[row_idx]
+                existing[question_name] = self._format_value(question_name, value)
 
-                type_error = self._validate_type(
-                    value,
-                    question_type,
-                    question_name,
-                    list_name=self._extract_list_name(question_type),
-                )
-                if type_error:
-                    errors.append(
-                        {
-                            "line": row_idx + 2,
-                            "column": col_idx + 1,
-                            "error_type": ERROR_TYPE_MISMATCH,
-                            "error_explanation": type_error,
-                            "question_name": question_name,
-                        }
-                    )
-                    continue
-
-                if question_name in self.question_constraints:
-                    constraint_error = self._validate_constraint(
-                        value, self.question_constraints[question_name], question_name
-                    )
-                    if constraint_error:
-                        error_dict = {
-                            "line": row_idx + 2,
-                            "column": col_idx + 1,
-                            "error_type": ERROR_CONSTRAINT_UNSATISFIED,
-                            "error_explanation": constraint_error,
-                            "question_name": question_name,
-                        }
-                        if question_name in self.question_constraint_messages:
-                            error_dict["constraint_message"] = self.question_constraint_messages[question_name]
-                        errors.append(error_dict)
-
-        return errors
-
-    def _validate_headers(self, columns) -> List[Dict[str, Any]]:
-        """
-        Validate that all column headers are present in the XLSForm as names or labels.
-
-        Args:
-            columns: The column headers from the spreadsheet
-
-        Returns:
-            List: List of error dictionaries
-        """
-        errors = []
-
-        for col_idx, column in enumerate(columns):
-            question_name = self._resolve_column_to_question_name(column)
-            if question_name is None:
-                errors.append(
-                    {
-                        "line": 1,
-                        "column": col_idx + 1,
-                        "error_type": ERROR_TYPE_MISMATCH,
-                        "error_explanation": f"Column header '{column}' does not match any question name or label in the XLSForm",
-                        "question_name": column,
-                    }
-                )
-
-        return errors
-
-    def _validate_type(
-        self,
-        value,
-        question_type: str,
-        question_name: str,
-        list_name: Optional[str] = None,
-    ) -> Optional[str]:
-        """
-        Validate a value against a question type.
-
-        Args:
-            value: The value to validate
-            question_type: The question type
-            question_name: The question name
-            list_name: The list name for select questions
-
-        Returns:
-            Optional[str]: Error message if validation fails, None otherwise
-        """
-        if not isinstance(value, str):
-            value = str(value)
-
-        if question_type == "integer":
+        xml_file = tempfile.NamedTemporaryFile(delete=False)
+        with open(xml_file.name, 'w') as f:
+            f.write(self.survey_xml)
+        for i, answer in enumerate(answers):
             try:
-                int(value)
-                return None
-            except ValueError:
-                return f"Value '{value}' is not a valid integer for question '{question_name}'"
+                results.append({
+                    'xml': check_xform(xml_file.name, json.dumps(answers[answer])),
+                })
+            except ODKValidateError as e:
+                error_json = json.loads(str(e))
+                results.append({
+                    'line': i + 2,
+                    'column': list(self.question_labels.values()).index(error_json["question"]) + 1,
+                    'question_name': error_json["question"],
+                    'error_type': error_json["error"],
+                    'error_explanation': self._get_error_explanation(error_json),
+                    'constraint_message': self.question_constraint_messages.get(error_json["question"]),
+                })
 
-        elif question_type == "decimal":
-            try:
-                float(value)
-                return None
-            except ValueError:
-                return f"Value '{value}' is not a valid decimal for question '{question_name}'"
-
-        elif question_type.startswith("select_one"):
-            if list_name and list_name in self.choice_lists:
-                value_lower = value.lower()
-                choices_lower = [
-                    str(choice).lower() for choice in self.choice_lists[list_name]
-                ]
-
-                aliases_lower = {}
-                if list_name in self.choice_aliases:
-                    aliases_lower = {
-                        str(alias).lower(): choice
-                        for alias, choice in self.choice_aliases[list_name].items()
-                    }
-
-                if (
-                    value_lower not in choices_lower
-                    and value_lower not in aliases_lower
-                ):
-                    return f"Value '{value}' is not a valid choice for select_one question '{question_name}'"
-            return None
-
-        elif question_type.startswith("select_multiple"):
-            if list_name and list_name in self.choice_lists:
-                values = [v.strip().lower() for v in value.split()]
-                choices_lower = [
-                    str(choice).lower() for choice in self.choice_lists[list_name]
-                ]
-
-                aliases_lower = set()
-                if list_name in self.choice_aliases:
-                    aliases_lower = {
-                        str(alias).lower()
-                        for alias in self.choice_aliases[list_name].keys()
-                    }
-
-                for v in values:
-                    if v not in choices_lower and v not in aliases_lower:
-                        return f"Value '{v}' is not a valid choice for select_multiple question '{question_name}'"
-            return None
-
-        elif question_type == "date":
-            date_pattern = r"^\d{4}-\d{2}-\d{2}$"
-
-            if re.match(date_pattern, value):
-                return None
-
-            try:
-                from datetime import datetime
-
-                parsed_date = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                date_only = parsed_date.strftime("%Y-%m-%d")
-                if re.match(date_pattern, date_only):
-                    return None
-            except ValueError:
-                pass
-
-            return f"Value '{value}' is not a valid date (YYYY-MM-DD) for question '{question_name}'"
-
-        elif question_type == "time":
-            time_pattern = r"^\d{2}:\d{2}(:\d{2})?$"
-            if not re.match(time_pattern, value):
-                return f"Value '{value}' is not a valid time (HH:MM[:SS]) for question '{question_name}'"
-            return None
-
-        return None
-
-    def _validate_constraint(
-        self, value, constraint: str, question_name: str
-    ) -> Optional[str]:
-        """
-        Validate a value against a constraint.
-
-        Args:
-            value: The value to validate
-            constraint: The constraint expression
-            question_name: The question name
-
-        Returns:
-            Optional[str]: Error message if validation fails, None otherwise
-        """
-
-        regex_pattern = r'^regex\(\s*\.\s*,\s*[\'"](.*?)[\'"]\s*\)$'
-        regex_match = re.match(regex_pattern, constraint.strip())
-
-        if regex_match:
-            pattern_str = regex_match.group(1)
-            try:
-                if isinstance(value, (int, float)) and not pd.isna(value):
-                    digit_pattern = r"^\^?\(?(\[0-9\]|\d)\{(\d+)\}"
-                    digit_match = re.search(digit_pattern, pattern_str)
-                    if digit_match:
-                        expected_digits = int(digit_match.group(2))
-                        str_value = f"{int(value):0{expected_digits}d}"  # Pad with zeros if necessary: this feels hackish, but works for now
-                    else:
-                        str_value = (
-                            str(int(value)) if value == int(value) else str(value)
-                        )
-                else:
-                    str_value = str(value)
-
-                match_result = re.match(pattern_str, str_value)
-                if not match_result:
-                    return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-                return None
-            except re.error as e:
-                return f"Invalid regex pattern in constraint '{constraint}': {str(e)}"
-
-        processed_value = value
-        if self.question_types.get(question_name) == "integer":
-            try:
-                processed_value = int(value)
-            except ValueError:
-                return f"Cannot validate constraint for non-integer value '{value}'"
-        elif self.question_types.get(question_name) == "decimal":
-            try:
-                processed_value = float(value)
-            except ValueError:
-                return f"Cannot validate constraint for non-decimal value '{value}'"
-
-        if self._evaluate_xpath_constraint(constraint, processed_value):
-            return None
-        else:
-            if question_name in self.question_constraint_messages:
-                return self.question_constraint_messages[question_name]
-            else:
-                return f"Constraint '{constraint}' is not satisfied for value '{value}'"
-
-    def _evaluate_xpath_constraint(self, expression: str, value) -> bool:
-        """
-        Evaluate an XPath constraint expression.
-
-        Args:
-            expression: The XPath constraint expression (e.g., ". >= 0 and . < 120")
-            value: The value to evaluate against
-
-        Returns:
-            bool: True if constraint is satisfied, False otherwise
-        """
-        try:
-            fake_node = Element("value")
-            fake_node.text = str(value)
-
-            # Create an XPath parser and context
-            parser = XPath1Parser()
-            tree = parser.parse(expression)
-            context = XPathContext(fake_node)
-
-            # Evaluate the constraint expression
-            result = tree.evaluate(context)
-            return bool(result)
-        except Exception:
-            return False
-
-    def _extract_list_name(self, question_type: str) -> Optional[str]:
-        """
-        Extract the list name from a select_one or select_multiple question type.
-
-        Args:
-            question_type: The question type string
-
-        Returns:
-            Optional[str]: The list name if found, None otherwise
-        """
-        if question_type.startswith("select_one ") or question_type.startswith(
-            "select_multiple "
-        ):
-            parts = question_type.split(" ", 1)
-            if len(parts) > 1:
-                return parts[1].strip()
-        return None
+        return results
 
     def _resolve_column_to_question_name(self, column: str) -> Optional[str]:
         """
@@ -630,8 +277,51 @@ class XLSFormValidator:
 
         return None
 
+    def _format_value(self, question_name: str, value: str) -> str:
+        """
+        format a given value so that it can be converted to a JSON string
+        """
+        if isinstance(value, Timestamp):
+            return value.__format__("%d/%m/%YT%H:%M:%S")
+
+        question_type = self.question_types.get(question_name)
+        if question_type.startswith("select one"):
+            list_name = self._extract_list_name(question_type)
+            if list_name and list_name in self.choice_lists:
+                return self._get_choice_from_value(
+                    self.choice_lists[list_name],
+                    self.choice_aliases.get(list_name),
+                    value,
+                )
+        if question_type.startswith("select multiple"):
+            list_name = self._extract_list_name(question_type)
+            if list_name and list_name in self.choice_lists:
+                choice_list = self.choice_lists[list_name],
+                choice_aliases = self.choice_aliases.get(list_name)
+                map(lambda x: self._get_choice_from_value(choice_list, choice_aliases, x), value.split(','))
+
+        return str(value) if isinstance(value, str) or not isnan(value) else ""
+
+    @staticmethod
+    def _get_choice_from_value(choice_list: list[str], choice_aliases: Optional[dict[str, str]], value: str) -> str:
+        value_lower = value.lower() if isinstance(value, str) else value
+        choices_lower = [str(choice).lower() for choice in choice_list]
+        if value_lower in choices_lower:
+            return choice_list[choices_lower.index(value_lower)]
+
+        if choice_aliases:
+            aliases_lower = {
+                str(alias).lower(): choice
+                for alias, choice in choice_aliases.items()
+            }
+
+            if value_lower in aliases_lower:
+                return aliases_lower[value_lower]
+
+        return value
+
     def create_highlighted_excel(
-        self, spreadsheet_file, errors: List[Dict[str, Any]]
+            self, spreadsheet_file, errors: List[Dict[str, Any]]
     ) -> io.BytesIO:
         """
         Create an Excel file with highlighted error cells and an error tab.
@@ -683,122 +373,49 @@ class XLSFormValidator:
 
         return output_buffer
 
+    @staticmethod
+    def _extract_list_name(question_type: str) -> Optional[str]:
+        """
+        Extract the list name from a select_one or select_multiple question type.
+
+        Args:
+            question_type: The question type string
+
+        Returns:
+            Optional[str]: The list name if found, None otherwise
+        """
+        if question_type.startswith("select one ") or question_type.startswith(
+                "select multiple "
+        ):
+            parts = question_type.split(" ", 2)
+            if len(parts) > 2:
+                return parts[2].strip()
+        return None
+
     def generate_xml_from_spreadsheet(
-        self, spreadsheet_file, version="1.0", skip_validation=False
+            self, spreadsheet_file
     ):
         """
         Generate XML files from validated spreadsheet data.
 
         Args:
             spreadsheet_file: The spreadsheet file object
-            version: Version string for the XML files
-            skip_validation: Skip validation if already validated
 
         Returns:
             Iterator yielding XML strings for each row
         """
-        if not skip_validation:
-            validation_result = self.validate_spreadsheet(spreadsheet_file)
-            if not validation_result["is_valid"]:
-                raise ValueError(
-                    f"Spreadsheet validation failed: {validation_result['errors']}"
-                )
+        validation_result = self.validate_spreadsheet(spreadsheet_file)
+        if not validation_result["is_valid"]:
+            raise ValueError(
+                f"Spreadsheet validation failed: {validation_result}"
+            )
 
-        memory_file = self._save_temp_file(spreadsheet_file)
-        memory_file.seek(0)
+        for result in validation_result["valides"]:
+            yield result["xml"]
 
-        df = pd.read_excel(memory_file)
-
-        for _, row in df.iterrows():
-            xml_string = self._generate_xml_for_row(row, version)
-            yield xml_string
-
-    def _generate_xml_for_row(self, row, version):
-        """
-        Generate XML for a single spreadsheet row using the XLSForm data instance structure.
-
-        Args:
-            row: Pandas Series representing a spreadsheet row
-            version: Version string for the XML
-
-        Returns:
-            str: XML string for the row
-        """
-        if not self.data_instance_template:
-            raise ValueError("XLSForm must be parsed before generating XML")
-
-        import xml.etree.ElementTree as ET
-        import copy
-
-        # Create a deep copy of the data instance template
-        root = copy.deepcopy(self.data_instance_template)
-
-        if "xmlns" in root.attrib:
-            del root.attrib["xmlns"]
-
-        for elem in root.iter():
-            if elem.tag.startswith("{"):
-                elem.tag = elem.tag.split("}", 1)[1]
-
-        root.set("version", version)
-        root.set("xmlns:h", "http://www.w3.org/1999/xhtml")
-        root.set("xmlns:xsd", "http://www.w3.org/2001/XMLSchema")
-        root.set("xmlns:jr", "http://openrosa.org/javarosa")
-        root.set("xmlns:ev", "http://www.w3.org/2001/xml-events")
-        root.set("xmlns:orx", "http://openrosa.org/xforms")
-        root.set("xmlns:odk", "http://www.opendatakit.org/xforms")
-
-        for column_name, value in row.items():
-            if pd.isna(value):
-                continue
-
-            question_name = self._resolve_column_to_question_name(column_name)
-            if question_name is None:
-                question_name = (
-                    column_name.lower()
-                    .replace(" ", "_")
-                    .replace("/", "_")
-                    .replace("°", "n")
-                )
-
-            question_name = "".join(c for c in question_name if c.isalnum() or c == "_")
-
-            element = root.find(question_name)
-            if element is None:
-                element = root.find(f".//{question_name}")
-
-            if element is not None:
-                if isinstance(value, (int, float)):
-                    str_value = str(int(value)) if value == int(value) else str(value)
-                else:
-                    str_value = str(value)
-                element.text = str_value
-
-        meta = root.find("meta")
-        if meta is None:
-            meta = root.find(".//meta")
-        if meta is not None:
-            instance_id = meta.find("instanceID")
-            if instance_id is not None:
-                instance_id.text = f"uuid:{uuid.uuid4()}"
-
-        return ET.tostring(root, encoding="unicode")
-
-    def generate_xml_from_dict(self, data_dict, version="1.0"):
-        """
-        Generate XML from a dictionary of key-value pairs.
-
-        Args:
-            data_dict: Dictionary containing question names/labels as keys and values as answers
-            version: Version string for the XML file
-
-        Returns:
-            str: XML string for the data
-        """
-        if not isinstance(data_dict, dict):
-            raise ValueError("data_dict must be a dictionary")
-
-        row_series = pd.Series(data_dict)
-
-        xml_string = self._generate_xml_for_row(row_series, version)
-        return xml_string
+    def _get_error_explanation(self, error_json: dict[str, str]) -> str:
+        if error_json["error"] == ERROR_CONSTRAINT_UNSATISFIED:
+            return f"Constraint '{self.question_constraints[error_json['question']]}' is not satisfied for value '{error_json['answer']}'"
+        if error_json["error"] == ERROR_VALUE_REQUIRED:
+            return f"Value is required for question '{error_json['question']}'"
+        return error_json["error"]

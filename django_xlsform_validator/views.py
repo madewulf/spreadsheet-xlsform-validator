@@ -2,16 +2,17 @@
 Views for the XLSForm validator API.
 """
 
-from django.shortcuts import render
-from django.http import FileResponse, Http404
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.decorators import action
-import os
-import uuid
 import base64
 import io
+import os
+import uuid
+
+from django.http import FileResponse, Http404
+from django.shortcuts import render
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
 
 from . import app_settings
 from .serializers import SpreadsheetValidationSerializer, ValidationResultSerializer
@@ -49,7 +50,7 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
 
         validator = XLSFormValidator()
 
-        if not validator.parse_xlsform(xlsform_file):
+        if not validator.parse_xlsform(xlsform_file, version):
             return Response(
                 {
                     "result": "invalid",
@@ -73,11 +74,7 @@ class SpreadsheetValidationViewSet(viewsets.ViewSet):
 
             if generate_xml:
                 try:
-                    xml_generator = validator.generate_xml_from_spreadsheet(
-                        spreadsheet_file, version, skip_validation=True
-                    )
-                    xml_files = list(xml_generator)
-                    response_data["xml_files"] = xml_files
+                    response_data["xml_files"] = list(map(lambda x: x["xml"], result["valides"]))
                 except Exception as e:
                     return Response(
                         {
