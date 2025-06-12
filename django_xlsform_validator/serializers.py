@@ -3,7 +3,9 @@ Serializers for the XLSForm validator API.
 """
 
 from rest_framework import serializers
+
 from . import app_settings
+from .validation import ERROR_VALUE_REQUIRED, ERROR_CONSTRAINT_UNSATISFIED
 
 
 class SpreadsheetValidationSerializer(serializers.Serializer):
@@ -72,7 +74,7 @@ class ValidationErrorSerializer(serializers.Serializer):
         help_text="Column number in the original spreadsheet."
     )
     error_type = serializers.CharField(
-        help_text="Type of error: 'type_mismatch', 'error_constraint_unsatisfied', or 'error_value_required'."
+        help_text=f"Type of error: 'type_mismatch', '{ERROR_CONSTRAINT_UNSATISFIED}', or '{ERROR_VALUE_REQUIRED}'."
     )
     error_explanation = serializers.CharField(
         help_text="Human-readable explanation of the error."
@@ -82,6 +84,7 @@ class ValidationErrorSerializer(serializers.Serializer):
     )
     constraint_message = serializers.CharField(
         required=False,
+        allow_null=True,
         help_text="Custom constraint message from XLSForm if available."
     )
 
