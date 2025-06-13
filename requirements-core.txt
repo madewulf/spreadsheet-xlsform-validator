@@ -1,5 +1,5 @@
 django
 djangorestframework
-pyxform==2.0.3
+pyxform==2.0.0
 elementpath>=5.0.1
 pandas
